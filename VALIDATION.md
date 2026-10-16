@@ -13,4 +13,4 @@ The extended integration scenarios for ignore comments, exclusions, and independ
 
 ## Publication preparation
 
-The package was renamed and its diagnostics and documentation translated into English. Unit and integration test suites were not rerun during publication preparation. `dart pub publish --dry-run` completed successfully with zero warnings. The package archive contains the intended source, tests, examples, license, changelog, and README; local caches and validation notes are excluded.
+Unit and integration test suites were not rerun during publication preparation. `dart pub publish --dry-run` completed successfully with zero warnings. The package archive contains the intended source, tests, examples, license, changelog, and README; local caches and validation notes are excluded.
