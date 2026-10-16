@@ -1,0 +1,19 @@
+name: clear_dart_lints
+description: Dart analyzer plugin enforcing readable block bodies, explicit Flutter builders, and one public class per file.
+version: 0.2.0
+repository: https://github.com/grad2/clear_dart_lints
+homepage: https://github.com/grad2/clear_dart_lints
+issue_tracker: https://github.com/grad2/clear_dart_lints/issues
+topics:
+  - lints
+  - analyzer
+  - flutter
+environment:
+  sdk: '>=3.13.0 <4.0.0'
+dependencies:
+  analysis_server_plugin: ^0.3.24
+  analyzer: ^14.5.0
+  analyzer_plugin: ^0.14.18
+  dart_style: ^3.1.14
+dev_dependencies:
+  test: ^1.29.0

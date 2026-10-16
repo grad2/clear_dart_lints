@@ -1,0 +1,9 @@
+formatter:
+  page_width: 100
+plugins:
+  clear_dart_lints:
+    path: ..
+    diagnostics:
+      prefer_block_body_for_long_expression: true
+      prefer_block_body_for_build: true
+      one_public_class_per_file: true
