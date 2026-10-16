@@ -14,7 +14,7 @@ All rules are opt-in. Diagnostics appear in supported IDEs and in `dart analyze`
 
 - Dart SDK **>=3.13.0 <4.0.0**.
 - Flutter projects must use a Flutter SDK containing a compatible Dart version.
-- The implementation was checked on Dart **3.13.2** and Flutter **3.47.2** before the package rename and English translation. See [Validation history](https://github.com/grad2/clear_dart_lints/blob/main/VALIDATION.md).
+- The implementation was checked on Dart **3.13.2** and Flutter **3.47.2**. See [Validation history](https://github.com/grad2/clear_dart_lints/blob/main/VALIDATION.md).
 
 This is a development tool; it does not add runtime behavior to your application.
 
