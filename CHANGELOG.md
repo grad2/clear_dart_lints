@@ -1,3 +1,8 @@
+## 0.2.1
+
+- Add the `agents` topic to improve package discovery on pub.dev.
+- No changes to analyzer rules or quick fixes.
+
 ## 0.2.0
 
 Initial public release as `clear_dart_lints`.

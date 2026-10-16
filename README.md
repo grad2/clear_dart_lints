@@ -28,7 +28,7 @@ formatter:
 
 plugins:
   clear_dart_lints:
-    version: ^0.2.0
+    version: ^0.2.1
     diagnostics:
       prefer_block_body_for_long_expression: true
       prefer_block_body_for_build: true
