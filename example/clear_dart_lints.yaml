@@ -1,0 +1,35 @@
+schema_version: 1
+exclude: ['lib/excluded_conventions.dart']
+layers:
+  presentation: ['lib/new_rules.dart', 'lib/suppressed.dart', 'lib/excluded_conventions.dart']
+roles:
+  repository:
+    names: ['ItemRepository', 'ItemRepositoryImpl']
+    libraries: ['lib/new_rules.dart']
+  bloc:
+    names: ['ItemsBloc']
+    libraries: ['lib/new_rules.dart']
+  transport:
+    names: ['ApiClient']
+    libraries: ['lib/new_rules.dart']
+rules:
+  layer_dependencies:
+    source_layers: [presentation]
+    forbidden:
+      - from: [presentation]
+        uris: ['dart:convert']
+  repositories_only_in_blocs:
+    source_layers: [presentation]
+    repository_roles: [repository]
+    allowed_consumer_roles: [bloc]
+    composition_roots: ['lib/assembly/**']
+  depend_on_contracts:
+    source_layers: [presentation]
+    dependency_roles: [repository]
+    composition_roots: ['lib/assembly/**']
+  no_transport_in_domain:
+    source_layers: [presentation]
+    transport_roles: [transport]
+    forbidden_symbols:
+      - library: dart:convert
+        name: jsonEncode

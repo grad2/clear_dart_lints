@@ -7,3 +7,11 @@ plugins:
       prefer_block_body_for_long_expression: true
       prefer_block_body_for_build: true
       one_public_class_per_file: true
+      avoid_public_late_final_fields: true
+      avoid_nullable_async_returns: true
+      avoid_nullable_collection_returns: true
+      layer_dependencies: true
+      repositories_only_in_blocs: true
+      depend_on_contracts: true
+      no_transport_in_domain: true
+      avoid_nested_widget_ternaries: true
