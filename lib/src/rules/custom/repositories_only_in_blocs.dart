@@ -25,8 +25,9 @@ class RepositoriesOnlyInBlocs extends ArchitectureRule {
     if (matches(
       (options['composition_roots'] as List).cast<String>(),
       config.relative(context.currentUnit!.file.path),
-    ))
+    )) {
       return;
+    }
     final reported = <int>{};
     unit.accept(
       RoleUsage((node, type, element) {
@@ -35,8 +36,9 @@ class RepositoriesOnlyInBlocs extends ArchitectureRule {
         if (config.hasRole(
           owner?.thisType,
           (options['allowed_consumer_roles'] as List).cast<String>(),
-        ))
+        )) {
           return;
+        }
         if (reported.add(node.offset)) reportViolation(node);
       }),
     );

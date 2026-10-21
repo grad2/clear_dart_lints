@@ -28,8 +28,9 @@ class DependOnContracts extends ArchitectureRule {
     if (matches(
       (options['composition_roots'] as List).cast<String>(),
       config.relative(context.currentUnit!.file.path),
-    ))
+    )) {
       return;
+    }
     final reported = <int>{};
     unit.accept(
       RoleUsage((node, type, element) {
@@ -84,8 +85,9 @@ bool _injected(FieldDeclaration field) {
             (parameter) =>
                 parameter is FieldFormalParameterElement &&
                 parameter.field == variable.declaredFragment?.element,
-          ))
+          )) {
             return true;
+          }
           final assignments = _Assignments(variable.declaredFragment!.element, element);
           constructor.body.accept(assignments);
           return assignments.injected ||
@@ -114,8 +116,9 @@ class _Assignments extends RecursiveAstVisitor<void> {
         variable?.baseElement == field.baseElement &&
         right is SimpleIdentifier &&
         right.element is FormalParameterElement &&
-        right.element?.enclosingElement == constructor)
+        right.element?.enclosingElement == constructor) {
       injected = true;
+    }
     super.visitAssignmentExpression(node);
   }
 }

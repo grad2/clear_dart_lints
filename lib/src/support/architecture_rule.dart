@@ -50,8 +50,9 @@ class _Visitor extends SimpleAstVisitor<void> {
     final options = config.parameters(rule.name);
     if (!config
         .layersFor(context.currentUnit!.file.path)
-        .any((layer) => (options['source_layers'] as List).contains(layer)))
+        .any((layer) => (options['source_layers'] as List).contains(layer))) {
       return;
+    }
     rule.check(node, context, config, options);
   }
 }

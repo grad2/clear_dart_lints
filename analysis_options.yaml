@@ -1,3 +1,5 @@
+include: package:lints/core.yaml
+
 formatter:
   page_width: 100
 analyzer:

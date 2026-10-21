@@ -102,8 +102,9 @@ Future<List<String>> check(
 }) async {
   final fixture = await Fixture.create(source);
   try {
-    if (config != null)
+    if (config != null) {
       File('${fixture.root.path}/clear_dart_lints.yaml').writeAsStringSync(config);
+    }
     for (final entry in files.entries) {
       final file = File('${fixture.root.path}/${entry.key}');
       file.parent.createSync(recursive: true);

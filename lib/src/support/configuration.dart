@@ -67,8 +67,9 @@ ConfigurationResult configurationFor(RuleContext context) {
       if (!file.exists) throw const FormatException('Missing clear_dart_lints.yaml.');
       final data = _map(loadYaml(file.readAsStringSync()), 'configuration');
       _keys(data, {'schema_version', 'exclude', 'layers', 'roles', 'rules'});
-      if (data['schema_version'] is! int || data['schema_version'] != 1)
+      if (data['schema_version'] is! int || data['schema_version'] != 1) {
         throw const FormatException('schema_version must be 1.');
+      }
       data['exclude'] = _strings(data['exclude'] ?? [], 'exclude');
       final layers = _map(data['layers'], 'layers');
       for (final key in layers.keys) {
@@ -105,8 +106,9 @@ ConfigurationResult configurationFor(RuleContext context) {
             spec['composition_roots'] = _strings(spec['composition_roots'], 'composition_roots');
           }
           if (name == 'no_transport_in_domain') {
-            if (spec['forbidden_symbols'] is! List)
+            if (spec['forbidden_symbols'] is! List) {
               throw const FormatException('forbidden_symbols must be a list.');
+            }
             spec['forbidden_symbols'] = [
               for (final symbol in spec['forbidden_symbols'] as List) _symbol(symbol),
             ];

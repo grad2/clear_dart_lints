@@ -1,3 +1,8 @@
+## 0.4.1
+
+- Add a discoverable example guide for pub.dev with setup and expected diagnostics.
+- Enable core lint checks during development and fix static analysis findings without changing rule behavior.
+
 ## 0.4.0
 
 - Add Effective Dart `avoid_nullable_collection_returns`.

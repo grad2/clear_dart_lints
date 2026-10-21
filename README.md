@@ -36,7 +36,7 @@ formatter:
 
 plugins:
   clear_dart_lints:
-    version: ^0.4.0
+    version: ^0.4.1
     diagnostics:
       prefer_block_body_for_long_expression: true
       prefer_block_body_for_build: true
@@ -195,7 +195,7 @@ Enable the desired diagnostics:
 ```yaml
 plugins:
   clear_dart_lints:
-    version: ^0.4.0
+    version: ^0.4.1
     diagnostics:
       avoid_public_late_final_fields: true
       avoid_nullable_async_returns: true
