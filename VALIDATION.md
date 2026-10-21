@@ -5,6 +5,10 @@
 Version 0.4.0 includes both implementation milestones. The planned 0.3.0 scope
 is included in this release rather than published separately.
 
+Release operations on 2026-10-22: commit `8a7aad7` and tag `v0.4.0` were pushed
+to GitHub. A clean-tree publish dry run reported zero warnings and only the
+version-jump hint. pub.dev then confirmed successful upload of version 0.4.0.
+
 Environment: Dart 3.13.2, Flutter 3.47.2, macOS arm64.
 
 - `dart test`: 63 tests, including the 44 existing rule and quick-fix regressions.
