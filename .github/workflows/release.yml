@@ -1,0 +1,50 @@
+name: GitHub release
+
+on:
+  push:
+    tags: ['v*']
+    branches: [main]
+    paths: ['.github/workflows/release.yml']
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Read release metadata from the triggering commit
+        run: |
+          gh api "repos/$GH_REPO/contents/pubspec.yaml?ref=$GITHUB_SHA" --jq .content | base64 --decode > pubspec.yaml
+          gh api "repos/$GH_REPO/contents/CHANGELOG.md?ref=$GITHUB_SHA" --jq .content | base64 --decode > CHANGELOG.md
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          version = re.search(r'^version:\s*(\S+)\s*$', Path('pubspec.yaml').read_text(), re.M).group(1)
+          tag = f'v{version}'
+          if os.environ['GITHUB_REF_TYPE'] == 'tag' and os.environ['GITHUB_REF_NAME'] != tag:
+              raise SystemExit('Tag does not match the package version.')
+          changelog = Path('CHANGELOG.md').read_text()
+          section = re.search(rf'^## {re.escape(version)}\s*\n(.*?)(?=^## |\Z)', changelog, re.M | re.S)
+          if section is None:
+              raise SystemExit('Missing changelog entry for the package version.')
+          Path('release-notes.md').write_text(section.group(1).strip() + '\n\n'
+              + f'Package: https://pub.dev/packages/clear_dart_lints/versions/{version}\n')
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'RELEASE_TAG={tag}\nRELEASE_VERSION={version}\n')
+          PY
+      - name: Publish the existing version tag as a GitHub Release
+        run: |
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+            exit 0
+          fi
+          gh release create "$RELEASE_TAG" --verify-tag --latest \
+            --title "clear_dart_lints $RELEASE_VERSION" --notes-file release-notes.md
