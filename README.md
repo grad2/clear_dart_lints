@@ -1,8 +1,8 @@
 # clear_dart_lints
 
-An independent native Dart/Flutter analyzer plugin with configurable architecture policy and optional Effective Dart/style conventions. This package is not an official Dart or Flutter product and adds no application runtime behavior.
+Strict architecture checks for Dart and Flutter projects, designed for developers, coding agents, and CI. Define which layers and roles may depend on each other in `clear_dart_lints.yaml`. The native Dart analyzer reports violations in the IDE and on the command line.
 
-Version **0.5.0** makes architecture a default analyzer **warning** policy. Choose an editable architecture template, classify your sources, and run a read-only setup audit followed by native analysis. Optional style rules remain opt-in, with the existing arrow-body quick fixes.
+Version **0.5.0** enables architecture warnings by default and requires schema 2. Effective Dart and style checks remain opt-in.
 
 ## Start here
 
@@ -16,26 +16,19 @@ Clean use cases are optional: state managers may receive an abstract repository 
 
 Use Dart SDK **>=3.13.0 <4.0.0**, or a Flutter SDK containing a compatible Dart version. The development baseline uses Dart **3.13.2**. See [validation history](https://github.com/grad2/clear_dart_lints/blob/main/VALIDATION.md) for recorded checks.
 
-In the consumer's root `pubspec.yaml`, add the verifier executable as a development dependency:
+Pin the same version in the consumer's `pubspec.yaml` and `analysis_options.yaml`.
 
 ```yaml
+# pubspec.yaml
 dev_dependencies:
   clear_dart_lints: 0.5.0
 ```
 
-In the consumer's root `analysis_options.yaml`, install the native plugin:
-
 ```yaml
-formatter:
-  page_width: 100
+# analysis_options.yaml
 plugins:
   clear_dart_lints:
     version: 0.5.0
-    diagnostics:
-      # Optional styles; architecture is automatically enabled as warnings.
-      prefer_block_body_for_long_expression: true
-      prefer_block_body_for_build: true
-      one_public_class_per_file: true
 ```
 
 Merge with existing options without duplicate keys. Keep inherited formatter settings. The plugin version must exactly match the verifier dependency; the audit rejects plugin version ranges that could resolve independently. A dev dependency alone does not install the native plugin. For local development, use the same `path: ../clear_dart_lints` directory in both entries. No `custom_lint` integration is required.
@@ -45,8 +38,8 @@ Copy a [complete schema 2 `clear_dart_lints.yaml`](templates/README.md) into the
 Verify from the consumer root, requiring both commands to succeed:
 
 ```sh
-dart run clear_dart_lints:verify_setup
-dart analyze --format=machine --fatal-infos
+dart run clear_dart_lints:verify_setup &&
+  dart analyze --format=machine --fatal-infos
 ```
 
 The first command audits setup, effective analyzer options, layer coverage and suppression comments without editing files or running analysis. It separately reports setup issues such as `missing_plugin`, `disabled_architecture` and `architecture_suppression` when architecture enforcement is hidden or weakened. The second command is the native analyzer and enforces both architecture warnings and enabled style infos. An optional package-root argument is accepted by `verify_setup`. For scripts, stop on the first failure. See the [full workflow](docs/agent_integration.md).
