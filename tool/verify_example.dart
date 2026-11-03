@@ -1,112 +1,139 @@
 import 'dart:convert';
 import 'dart:io';
 
-/// Run from the package root after `flutter pub get` in example/.
+import 'package:clear_dart_lints/src/setup_verifier.dart';
+
+/// Exercises the native plugin on an isolated copy of the example.
 Future<void> main() async {
-  Future<List<List<String>>> diagnostics(String path) async {
-    final result = await Process.run(Platform.resolvedExecutable, [
-      '--suppress-analytics',
-      'analyze',
-      '--format=machine',
-      path,
-    ]);
-    if (result.exitCode != 0) {
-      throw StateError('Analyzer failed: ${result.stdout}\n${result.stderr}');
-    }
-    return const LineSplitter()
-        .convert(result.stdout.toString())
-        .where(
-          (line) =>
-              line.startsWith('INFO|') || line.startsWith('WARNING|') || line.startsWith('ERROR|'),
-        )
-        .map((line) => line.split('|'))
-        .toList();
-  }
-
-  void expectFile(List<List<String>> rows, String suffix, List<String> codes, {List<int>? lines}) {
-    final actual = rows.where((row) => row[3].replaceAll('\\', '/').endsWith(suffix)).toList();
-    final actualCodes = actual.map((row) => row[2].toLowerCase()).toList()..sort();
-    final expectedCodes = [...codes]..sort();
-    if (actualCodes.join(',') != expectedCodes.join(',')) {
-      throw StateError('$suffix: expected $expectedCodes, got $actual');
-    }
-    if (lines != null) {
-      final actualLines = actual.map((row) => int.parse(row[4])).toList()..sort();
-      if (actualLines.join(',') != lines.join(',')) {
-        throw StateError('$suffix: expected lines $lines, got $actualLines');
-      }
+  final source = Directory('example').absolute;
+  final temp = Directory.systemTemp.createTempSync('clear_dart_lints_example_');
+  final packageRoot = Directory.current.absolute.path;
+  void copy(Directory from, Directory to) {
+    to.createSync(recursive: true);
+    for (final entity in from.listSync()) {
+      final name = entity.uri.pathSegments.where((s) => s.isNotEmpty).last;
+      if (name == 'build' || name == '.DS_Store') continue;
+      if (entity is Directory) copy(entity, Directory('${to.path}/$name'));
+      if (entity is File) entity.copySync('${to.path}/$name');
     }
   }
 
-  const build = 'prefer_block_body_for_build';
-  const long = 'prefer_block_body_for_long_expression';
-  const classes = 'one_public_class_per_file';
-  // Analyze the project as a whole so included part files are analyzed with
-  // their defining library, rather than treating a part as a standalone target.
-  final example = await diagnostics('example');
-  const added = {
-    'avoid_public_late_final_fields',
-    'avoid_nullable_async_returns',
-    'avoid_nullable_collection_returns',
-    'layer_dependencies',
-    'repositories_only_in_blocs',
-    'depend_on_contracts',
-    'no_transport_in_domain',
-    'avoid_nested_widget_ternaries',
-  };
-  final newRows = example
-      .where((row) => row[3].replaceAll('\\', '/').endsWith('/lib/new_rules.dart'))
-      .toList();
-  final found = newRows.map((row) => row[2].toLowerCase()).toSet();
-  if (found.length != added.length || !found.containsAll(added)) {
-    throw StateError('Expected every new rule in new_rules.dart, got $newRows');
-  }
-  if (example.length != 8 + newRows.length) {
-    throw StateError('Unexpected example diagnostics: $example');
-  }
-  for (final file in ['suppressed.dart', 'excluded_conventions.dart', 'generated.g.dart']) {
-    expectFile(example, '/lib/$file', []);
-  }
-  expectFile(example, '/lib/bad.dart', [build, build, build, build, long, long]);
-  expectFile(example, '/lib/good.dart', []);
-  expectFile(example, '/lib/multiple_classes.dart', [classes]);
-  expectFile(example, '/lib/parts/main.dart', []);
-  expectFile(example, '/lib/parts/one.dart', []);
-  expectFile(example, '/lib/parts/two.dart', [classes]);
-  stdout.writeln(
-    'PASS: all eleven rules, parts, suppressions, YAML exclusions and generated code.',
-  );
-
-  final repeated = await diagnostics('example');
-  final firstFingerprint = example.map((row) => row.join('|')).toList()..sort();
-  final repeatedFingerprint = repeated.map((row) => row.join('|')).toList()..sort();
-  if (firstFingerprint.join('\n') != repeatedFingerprint.join('\n')) {
-    throw StateError('Repeated analysis lost diagnostics: $repeated');
-  }
-  stdout.writeln('PASS: repeated analysis with the existing cache preserves all diagnostics.');
-
-  // Mutate only a local test fixture, and restore it even on failed assertions.
-  final options = File('example/analysis_options.yaml');
-  final original = options.readAsStringSync();
   try {
-    for (final enabled in added) {
-      var content = original;
-      for (final name in [build, long, classes, ...added]) {
-        content = content.replaceAll('$name: true', '$name: ${name == enabled}');
-      }
-      options.writeAsStringSync(content);
-      final independent = await diagnostics('example');
-      if (independent.isEmpty || independent.any((row) => row[2].toLowerCase() != enabled)) {
-        throw StateError('Independent $enabled: $independent');
+    copy(source, temp);
+    final manifest = File('${temp.path}/pubspec.yaml');
+    manifest.writeAsStringSync(
+      manifest.readAsStringSync().replaceFirst('path: ..', 'path: $packageRoot'),
+    );
+    final packageConfig = File('${temp.path}/.dart_tool/package_config.json');
+    final config = jsonDecode(packageConfig.readAsStringSync()) as Map<String, dynamic>;
+    final originalBase = File('${source.path}/.dart_tool/package_config.json').uri;
+    for (final package in config['packages'] as List<dynamic>) {
+      final entry = package as Map<String, dynamic>;
+      final root = Uri.parse(entry['rootUri'] as String);
+      if (!root.isAbsolute) {
+        entry['rootUri'] = entry['name'] == 'clear_dart_lints_example'
+            ? temp.uri.toString()
+            : originalBase.resolveUri(root).toString();
       }
     }
-    stdout.writeln('PASS: each new diagnostic can be enabled independently.');
-    options.writeAsStringSync('analyzer:\n  exclude: [lib/new_rules.dart]\n$original');
-    final excluded = await diagnostics('example');
-    expectFile(excluded, '/lib/new_rules.dart', []);
-    if (excluded.length != 8) throw StateError('Analyzer exclusion failed: $excluded');
-    stdout.writeln('PASS: standard analyzer file exclusions.');
-  } finally {
+    packageConfig.writeAsStringSync(jsonEncode(config));
+    final options = File('${temp.path}/analysis_options.yaml');
+    final original = options.readAsStringSync().replaceFirst('path: ..', 'path: $packageRoot');
     options.writeAsStringSync(original);
+    final audit = await verifySetup(temp.path, verifierRoot: packageRoot);
+    if (!audit.passed) {
+      throw StateError(
+        'Setup audit failed: ${audit.issues.map((i) => '${i.code}: ${i.message}').join('; ')}',
+      );
+    }
+    Future<List<List<String>>> diagnostics() async {
+      final result = await Process.run(Platform.resolvedExecutable, [
+        '--suppress-analytics',
+        'analyze',
+        '--format=machine',
+        '--fatal-infos',
+        temp.path,
+      ]);
+      if (result.exitCode != 0 && result.exitCode != 1 && result.exitCode != 2) {
+        throw StateError('Analyzer failed: ${result.stdout}\n${result.stderr}');
+      }
+      if (result.stderr.toString().trim().isNotEmpty) {
+        throw StateError('Analyzer reported a plugin error: ${result.stderr}');
+      }
+      final rows = const LineSplitter()
+          .convert(result.stdout.toString())
+          .where(
+            (line) =>
+                line.startsWith('INFO|') ||
+                line.startsWith('WARNING|') ||
+                line.startsWith('ERROR|'),
+          )
+          .map((line) => line.split('|'))
+          .toList();
+      if ((rows.isEmpty && result.exitCode != 0) || (rows.isNotEmpty && result.exitCode == 0)) {
+        throw StateError('Unexpected gate exit ${result.exitCode}: $rows');
+      }
+      return rows;
+    }
+
+    final rows = await diagnostics();
+    final codes = rows.map((r) => r[2].toLowerCase()).toSet();
+    for (final code in [
+      'prefer_block_body_for_build',
+      'prefer_block_body_for_long_expression',
+      'one_public_class_per_file',
+      'avoid_public_late_final_fields',
+      'avoid_nullable_async_returns',
+      'avoid_nullable_collection_returns',
+      'avoid_nested_widget_ternaries',
+      'layer_dependencies',
+      'role_dependencies',
+      'depend_on_contracts',
+      'constructor_injection',
+      'forbidden_symbols',
+    ]) {
+      if (!codes.contains(code)) throw StateError('Missing $code: $rows');
+    }
+    final architecture = {
+      'layer_dependencies',
+      'role_dependencies',
+      'depend_on_contracts',
+      'constructor_injection',
+      'forbidden_symbols',
+    };
+    if (rows
+        .where((r) => architecture.contains(r[2].toLowerCase()))
+        .any((r) => r[0] != 'WARNING')) {
+      throw StateError('Architecture diagnostics must be warnings: $rows');
+    }
+    for (final file in ['suppressed.dart', 'excluded_conventions.dart', 'generated.g.dart']) {
+      if (rows.any((r) => r[3].replaceAll('\\', '/').endsWith('/lib/$file'))) {
+        throw StateError('Unexpected diagnostic in $file: $rows');
+      }
+    }
+    final again = await diagnostics();
+    List<String> fingerprint(List<List<String>> values) =>
+        values.map((r) => r.join('|')).toList()..sort();
+    if (fingerprint(rows).join('\n') != fingerprint(again).join('\n')) {
+      throw StateError('Repeated analysis changed diagnostics: $again');
+    }
+    options.writeAsStringSync('analyzer:\n  exclude: [lib/new_rules.dart]\n$original');
+    final excluded = await diagnostics();
+    if (excluded.any((r) => r[3].replaceAll('\\', '/').endsWith('/lib/new_rules.dart'))) {
+      throw StateError('Analyzer exclusion failed: $excluded');
+    }
+    options.writeAsStringSync(original);
+    Directory('${temp.path}/lib').deleteSync(recursive: true);
+    Directory('${temp.path}/lib').createSync();
+    File('${temp.path}/lib/main.dart').writeAsStringSync('void main() {}\n');
+    final cleanAudit = await verifySetup(temp.path, verifierRoot: packageRoot);
+    if (!cleanAudit.passed || (await diagnostics()).isNotEmpty) {
+      throw StateError('Clean package must pass setup and native analysis.');
+    }
+    stdout.writeln(
+      'PASS: setup audit, native warnings, optional styles, exclusions and clean gate.',
+    );
+  } finally {
+    temp.deleteSync(recursive: true);
   }
 }

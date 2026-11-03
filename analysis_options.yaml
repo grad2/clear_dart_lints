@@ -5,3 +5,4 @@ formatter:
 analyzer:
   exclude:
     - example/**
+    - templates/**

@@ -1,5 +1,41 @@
 # Validation history
 
+## 0.5.0 architecture rework — 2026-11-03
+
+Environment: Dart 3.13.2, Flutter 3.47.2, macOS arm64.
+
+- `dart test --reporter expanded`: all 93 tests passed, including schema 2,
+  architecture policies, all ten template variants, setup audits, and existing
+  optional style/quick-fix regressions.
+- `dart analyze --fatal-infos`: no issues. Template analyzer-options files are
+  excluded from package analysis because they are consumer configuration
+  fixtures, not nested configuration for this package.
+- `dart format --output=none --set-exit-if-changed lib bin test tool example/lib`:
+  41 files checked, no changes. `git diff --check`: clean.
+- `dart run tool/verify_example.dart`: setup audit, native warning severity,
+  expected nonzero analyzer gates, optional style diagnostics, explicit
+  exclusions, repeated analysis, and a clean package passing both audit and
+  native analysis. The verifier works on a temporary copy and leaves tracked
+  example configuration unchanged.
+- All ten template configurations parse through the production parser and have
+  behavioral tests using resolved framework identities. Documentation links
+  were checked, including the consumer agent guide and migration instructions.
+- The documented `dart run clear_dart_lints:verify_setup` command also passed
+  from the example consumer, using its independently resolved dependencies.
+- The publish dry run produced a local 51 KB archive inventory containing the
+  verifier, documentation and all ten templates, but external pub.dev
+  validation did not complete. The first attempt lacked network access; the
+  network-enabled attempt was rejected by automatic approval review because
+  archive disclosure/publication was outside the authorized scope. No public
+  validation score or successful publish dry run is claimed.
+
+Schema 1 and the previous specialized architecture rule names are intentionally
+unsupported. Architecture uses native warnings by default. The separate
+read-only setup audit is required to enforce configuration-only exceptions
+because native plugin diagnostics support source ignore comments.
+
+No commit, tag, push or package publication was performed.
+
 ## 0.4.1 local release preparation — 2026-10-22
 
 Environment: Dart 3.13.2, Flutter 3.47.2, macOS arm64.

@@ -1,67 +1,89 @@
 # clear_dart_lints
 
-An independent Dart/Flutter analyzer plugin implementing selected Effective Dart recommendations and opt-in custom conventions. This package is not an official Dart or Flutter product.
+An independent native Dart/Flutter analyzer plugin with configurable architecture policy and optional Effective Dart/style conventions. This package is not an official Dart or Flutter product and adds no application runtime behavior.
 
-| Category | Rule | Since |
-| --- | --- | --- |
-| Effective Dart | `avoid_public_late_final_fields` | 0.3.0 |
-| Effective Dart | `avoid_nullable_async_returns` | 0.3.0 |
-| Effective Dart | `avoid_nullable_collection_returns` | 0.4.0 |
-| Custom conventions | `prefer_block_body_for_long_expression` | 0.2.0 |
-| Custom conventions | `prefer_block_body_for_build` | 0.2.0 |
-| Custom conventions | `one_public_class_per_file` | 0.2.0 |
-| Custom conventions | `layer_dependencies` | 0.3.0 |
-| Custom conventions | `repositories_only_in_blocs` | 0.3.0 |
-| Custom conventions | `depend_on_contracts` | 0.4.0 |
-| Custom conventions | `no_transport_in_domain` | 0.4.0 |
-| Custom conventions | `avoid_nested_widget_ternaries` | 0.4.0 |
+Version **0.5.0** makes architecture a default analyzer **warning** policy. Choose an editable architecture template, classify your sources, and run a read-only setup audit followed by native analysis. Optional style rules remain opt-in, with the existing arrow-body quick fixes.
 
-All rules are opt-in. Diagnostics appear in supported IDEs and in `dart analyze` or `flutter analyze`.
+## Start here
 
-## Requirements
+1. Choose [Layered Bloc, Layered Cubit, Clean Bloc, Clean Cubit or MVVM](templates/README.md), in feature-first or layer-first layout. Copy the complete YAML policy and merge the analyzer snippet.
+2. Follow the [agent integration guide](docs/agent_integration.md) for matching plugin/verifier installation, CI commands and a **copyable consumer AGENTS.md snippet**.
+3. Read [configuration semantics and static limitations](docs/configuration.md). Existing 0.4 users must follow the [breaking migration guide](docs/migration_0_5.md); schema 1 is not supported.
 
-- Dart SDK **>=3.13.0 <4.0.0**.
-- Flutter projects must use a Flutter SDK containing a compatible Dart version.
-- The implementation was checked on Dart **3.13.2** and Flutter **3.47.2**. See [Validation history](https://github.com/grad2/clear_dart_lints/blob/main/VALIDATION.md).
+Clean use cases are optional: state managers may receive an abstract repository directly or through a use case. Bloc and Cubit presets recognize the corresponding resolved framework base identity, not merely a class-name suffix. Feature-spanning layer globs do not imply cross-feature isolation.
 
-This is a development tool; it does not add runtime behavior to your application.
+## Requirements and installation
 
-## Installation
+Use Dart SDK **>=3.13.0 <4.0.0**, or a Flutter SDK containing a compatible Dart version. The development baseline uses Dart **3.13.2**. See [validation history](https://github.com/grad2/clear_dart_lints/blob/main/VALIDATION.md) for recorded checks.
 
-Add the plugin to the root `analysis_options.yaml` of your package or pub workspace:
+In the consumer's root `pubspec.yaml`, add the verifier executable as a development dependency:
+
+```yaml
+dev_dependencies:
+  clear_dart_lints: 0.5.0
+```
+
+In the consumer's root `analysis_options.yaml`, install the native plugin:
 
 ```yaml
 formatter:
   page_width: 100
-
 plugins:
   clear_dart_lints:
-    version: ^0.4.1
+    version: 0.5.0
     diagnostics:
+      # Optional styles; architecture is automatically enabled as warnings.
       prefer_block_body_for_long_expression: true
       prefer_block_body_for_build: true
       one_public_class_per_file: true
 ```
 
-Keep existing formatter settings if you already define them, including through `include`. Merge with an existing `plugins` section rather than adding a duplicate YAML key.
+Merge with existing options without duplicate keys. Keep inherited formatter settings. The plugin version must exactly match the verifier dependency; the audit rejects plugin version ranges that could resolve independently. A dev dependency alone does not install the native plugin. For local development, use the same `path: ../clear_dart_lints` directory in both entries. No `custom_lint` integration is required.
 
-Restart the Dart Analysis Server after adding or updating the plugin. In VS Code, use **Dart: Restart Analysis Server**.
+Copy a [complete schema 2 `clear_dart_lints.yaml`](templates/README.md) into the consumer package root, adapt its paths and approved package URIs, then resolve dependencies (`dart pub get`, or `flutter pub get` for Flutter projects). Restart the Dart Analysis Server; in VS Code use **Dart: Restart Analysis Server**.
 
-The native analyzer plugin configuration installs the plugin. You do not need to add it to your application's `dev_dependencies` or configure `custom_lint`.
+Verify from the consumer root, requiring both commands to succeed:
 
-For a local checkout, replace `version` with a path:
-
-```yaml
-plugins:
-  clear_dart_lints:
-    path: ../clear_dart_lints
-    diagnostics:
-      prefer_block_body_for_long_expression: true
-      prefer_block_body_for_build: true
-      one_public_class_per_file: true
+```sh
+dart run clear_dart_lints:verify_setup
+dart analyze --format=machine --fatal-infos
 ```
 
-See [Dart analyzer plugins](https://dart.dev/tools/analyzer-plugins) for the native plugin configuration.
+The first command audits setup, effective analyzer options, layer coverage and suppression comments without editing files or running analysis. It separately reports setup issues such as `missing_plugin`, `disabled_architecture` and `architecture_suppression` when architecture enforcement is hidden or weakened. The second command is the native analyzer and enforces both architecture warnings and enabled style infos. An optional package-root argument is accepted by `verify_setup`. For scripts, stop on the first failure. See the [full workflow](docs/agent_integration.md).
+
+## Architecture policy
+
+Schema 2 requires explicit source inclusion, exactly one layer per included nonexcluded physical source, and a deny-by-default allowed dependency graph. Same-layer edges, SDK libraries and external packages all need explicit permission. Generated sources require explicit exclusion globs; generated markers do not suppress architecture. Excluded local targets remain subject to target-layer classification.
+
+| Diagnostic | Purpose |
+| --- | --- |
+| `invalid_configuration` | Reject invalid or missing schema 2 architecture policy. |
+| `unclassified_source` | Require an included physical source to belong to a layer. |
+| `ambiguous_layer` | Require layer globs to be disjoint for included sources. |
+| `layer_dependencies` | Enforce allowed local layers and external library URIs. |
+| `role_dependencies` | Restrict which consumer roles may reference dependency roles. |
+| `depend_on_contracts` | Require abstract dependency types. |
+| `constructor_injection` | Require constructor acquisition and injected field origins. |
+| `forbidden_symbols` | Forbid configured resolved declaration identities. |
+| `unverifiable_dependency` | Report dependency flows that cannot be verified statically. |
+
+All architecture diagnostics are warnings and automatically enabled. Composition roots are explicit per applicable rule; they do not waive layer classification or layer permissions. Exceptions need a supported rule, narrow source paths and a human-readable reason; configuration/classification failures cannot be excepted. See [all fields and their interactions](docs/configuration.md).
+
+## Optional style diagnostics
+
+Enable individual diagnostics under `plugins.clear_dart_lints.diagnostics`:
+
+| Category | Diagnostic | Since |
+| --- | --- | --- |
+| Effective Dart | `avoid_public_late_final_fields` | 0.3.0 |
+| Effective Dart | `avoid_nullable_async_returns` | 0.3.0 |
+| Effective Dart | `avoid_nullable_collection_returns` | 0.4.0 |
+| Custom style | `prefer_block_body_for_long_expression` | 0.2.0 |
+| Custom style | `prefer_block_body_for_build` | 0.2.0 |
+| Custom style | `one_public_class_per_file` | 0.2.0 |
+| Custom style | `avoid_nested_widget_ternaries` | 0.4.0 |
+
+These diagnostics retain informational severity and their existing generated-file behavior; they do not replace architecture configuration. Architecture has no automatic code fixes.
 
 ## Custom conventions
 
@@ -186,111 +208,6 @@ Map<String, Item> get byId => {}; // Allowed.
 
 Checks SDK `Iterable`, `List`, `Set` and `Map` with the same API and override exclusions as the async check. If `null` has a distinct meaning from an empty collection, suppress the diagnostic for that API and document that meaning. No quick fix is provided.
 
-## Configurable custom architecture conventions
-
-These four rules express author-defined architecture policies. They are independent of any application, state management or dependency injection package. Names such as `ItemsBloc` below are examples configured by the consumer, not built-in assumptions.
-
-Enable the desired diagnostics:
-
-```yaml
-plugins:
-  clear_dart_lints:
-    version: ^0.4.1
-    diagnostics:
-      avoid_public_late_final_fields: true
-      avoid_nullable_async_returns: true
-      avoid_nullable_collection_returns: true
-      layer_dependencies: true
-      repositories_only_in_blocs: true
-      depend_on_contracts: true
-      no_transport_in_domain: true
-      avoid_nested_widget_ternaries: true
-```
-
-Place one `clear_dart_lints.yaml` in the analyzed package root. Version 1 has no inheritance or nested overrides. Paths are package-relative with normalized separators. Glob matching is case-sensitive. Role `names` and `libraries` must both match an original type declaration; `libraries` can match a package-relative declaration path or its library URI. Resolved ancestors and implemented interfaces also confer roles.
-
-```yaml
-schema_version: 1
-exclude: ['lib/generated/**']
-layers:
-  presentation: ['lib/presentation/**']
-  domain: ['lib/domain/**']
-  data: ['lib/data/**']
-roles:
-  repository:
-    names: ['*Repository', '*RepositoryImpl']
-    libraries: ['lib/domain/**', 'lib/data/**']
-  bloc:
-    names: ['*Bloc']
-    libraries: ['lib/presentation/**']
-  transport:
-    names: ['ApiClient']
-    libraries: ['lib/data/**']
-rules:
-  layer_dependencies:
-    source_layers: [presentation, domain]
-    forbidden:
-      - from: [presentation, domain]
-        to: [data]
-        uris: ['package:http/**']
-  repositories_only_in_blocs:
-    source_layers: [presentation]
-    repository_roles: [repository]
-    allowed_consumer_roles: [bloc]
-    composition_roots: ['lib/presentation/assembly/**']
-  depend_on_contracts:
-    source_layers: [presentation, domain]
-    dependency_roles: [repository]
-    composition_roots: ['lib/presentation/assembly/**']
-  no_transport_in_domain:
-    source_layers: [domain]
-    transport_roles: [transport]
-    forbidden_symbols:
-      - library: dart:convert
-        name: jsonEncode
-      - library: dart:convert
-        name: jsonDecode
-      - library: dart:convert
-        name: json
-      - library: dart:convert
-        name: JsonEncoder
-      - library: dart:convert
-        name: JsonDecoder
-      - library: dart:convert
-        name: JsonCodec
-```
-
-Each enabled architecture rule requires its own parameters. Missing files, malformed YAML, unsupported schema versions, unknown keys and unknown layer/role references produce `invalid_configuration`. There are no hidden architecture defaults. Configuration uses the analyzer filesystem and is cached per analysis context and package. Restart Analysis Server after editing it.
-
-### layer_dependencies (0.3.0)
-
-Reports forbidden imports, exports and type references. For example, with the configuration above, importing `package:sample_app/data/items.dart` from presentation is reported; importing a domain contract is allowed. `from` intersects the current source layers; a matching `to` layer or URI glob prohibits the dependency. `to` and `uris` may be empty or omitted.
-
-Relative and package URIs, every conditional import/export branch, parts, transitive exports and cyclic export graphs are covered. Original declaration libraries identify referenced types, so barrels do not conceal their layer. No quick fix is provided.
-
-### repositories_only_in_blocs (0.3.0)
-
-Reports references to repository types and values outside allowed consumer classes in `source_layers`, including constructor injection and typed service location such as `locate<ItemRepository>()`. `ItemsBloc` and its subclasses may hold and use an `ItemRepository`; a screen outside an allowed role may not. Public bloc fields do not grant callers permission to use repository values. Configured composition root paths are exempt. No quick fix is provided.
-
-### depend_on_contracts (0.4.0)
-
-Dependencies matching `dependency_roles` must use abstract contracts and enter through constructors. Both `implements` and `extends` confer configured roles.
-
-```dart
-class ItemsBloc {
-  final ItemRepository repository;
-  ItemsBloc(this.repository); // Allowed when ItemRepository is abstract.
-}
-// Concrete constructor parameters, service location and constructing
-// ItemRepositoryImpl are reported outside composition roots.
-```
-
-Constructor initializing formals, field initializers and resolved assignments from constructor parameters support injected fields. Composition roots may create concrete implementations. No quick fix is provided.
-
-### no_transport_in_domain (0.4.0)
-
-In configured source layers, reports types matching `transport_roles` and resolved references to `forbidden_symbols`. For example, `jsonEncode(item)` from `dart:convert` is reported; an unrelated application function named `jsonEncode` is allowed. Prefixes and reexports do not change element identity. A class symbol also forbids its constructors and members. No quick fix is provided.
-
 ## Additional custom style convention
 
 ### avoid_nested_widget_ternaries (0.4.0)
@@ -309,8 +226,6 @@ final children = <Widget>[if (first) const A() else const B()];
 
 Unrelated types named `Widget` are allowed. No quick fix is provided.
 
-All new rules skip `*.g.dart`, `*.freezed.dart` and the standard `// GENERATED CODE - DO NOT MODIFY BY HAND` marker. Optional YAML `exclude` globs also apply to the new rules. Existing style rules retain their behavior.
-
 ## Recommended SDK analyzer settings
 
 Use SDK rules such as `prefer_initializing_formals`, `avoid_returning_this`, `unnecessary_lambdas` and `prefer_collection_literals` through the analyzer’s `linter.rules` settings or your chosen SDK lint set. This plugin does not duplicate them.
@@ -323,11 +238,9 @@ The fix adds `return` for returned values and keeps expression statements for `v
 
 **The fix formats the file** using `formatter.page_width`. Other unformatted portions of the same file can therefore change. Fixes are applied to one arrow at a time.
 
-## Disable or suppress rules
+## Optional style suppression
 
-Set an individual diagnostic to `false`, or remove `clear_dart_lints` from `plugins` to disable the plugin. Restart the Analysis Server after configuration changes.
-
-Use standard analyzer ignore comments with the plugin prefix:
+Optional styles can be disabled individually under the plugin's `diagnostics` mapping. Standard analyzer ignore comments can suppress a style diagnostic:
 
 ```dart
 class First {}
@@ -336,28 +249,19 @@ class First {}
 class Second {}
 ```
 
-For an entire file:
-
-```dart
-// ignore_for_file: clear_dart_lints/one_public_class_per_file
-```
-
-Standard analyzer file exclusions apply. Use the same suppression syntax for every diagnostic, including `clear_dart_lints/invalid_configuration`.
+A file-level style suppression uses `// ignore_for_file: clear_dart_lints/one_public_class_per_file`. Architecture uses reviewed configuration exceptions instead. The setup audit rejects architecture ignore comments, broad warning suppressions that can hide architecture, disabled architecture diagnostics and severity reductions. Removing the plugin is also detected by the audit. Keep both verification commands in CI.
 
 ## Examples and development
 
-The repository includes a Flutter example configured with a local `path` dependency on the plugin:
+The [Flutter example guide](example/README.md) explains the intentionally invalid analyzer fixture and its local plugin installation. It is not a runnable application. From the package checkout, resolve package dependencies, then resolve the example's Flutter dependencies before verifying its expected diagnostics:
 
 ```sh
 dart pub get
 cd example
 flutter pub get
-dart analyze
 ```
 
-The example preserves the original eight style diagnostics and adds `new_rules.dart` covering all eight new rules. `good.dart`, `suppressed.dart`, `excluded_conventions.dart` and generated code have no expected diagnostics.
-
-From the package root, contributors can run:
+From the package root:
 
 ```sh
 dart test
@@ -365,17 +269,11 @@ dart analyze
 dart run tool/verify_example.dart
 ```
 
-The verification tool checks the complete example, repeats analysis with the cache, and enables each new diagnostic independently. It restores the example options after those checks. See [Validation history](https://github.com/grad2/clear_dart_lints/blob/main/VALIDATION.md) for the checks performed for this release.
-
-Diagnostics are informational by default. To make them fail a CI check, use:
-
-```sh
-dart analyze --fatal-infos
-```
+The consumer gate is `verify_setup` followed by `dart analyze --format=machine --fatal-infos`; the example verifier has a different purpose because the fixture intentionally contains violations. See [validation history](https://github.com/grad2/clear_dart_lints/blob/main/VALIDATION.md) for recorded release checks.
 
 ## Compatibility notes
 
-Analyzer and formatter dependencies use compatible version ranges, with the resolved versions recorded in the repository lockfile. Duplicate-diagnostic handling uses a small compatibility bridge to the analyzer's internal plugin configuration model. Update these dependencies as a coordinated change.
+Analyzer and formatter dependencies use compatible version ranges, with resolved versions recorded in the repository lockfile. Update analyzer/plugin dependencies as a coordinated change. Schema 2 has no inheritance or schema 1 compatibility; templates are copied and edited, never loaded as runtime presets.
 
 ## License
 

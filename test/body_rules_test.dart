@@ -33,15 +33,17 @@ ExpressionFunctionBody parsedBody(String source) => bodies(parseString(content: 
 class Fixture {
   final Directory root;
   final AnalysisContextCollection contexts;
-  Fixture._(this.root, this.contexts);
+  final Directory external;
+  Fixture._(this.root, this.contexts, this.external);
   static Future<Fixture> create(String source, {String options = '', String? included}) async {
     final root = Directory.systemTemp.createTempSync('clear_dart_lints_test_');
     final sdk = File(Platform.resolvedExecutable).parent.parent;
+    final external = Directory.systemTemp.createTempSync('clear_dart_lints_external_');
     File('${root.path}/pubspec.yaml')
         .writeAsStringSync('name: fixture\nenvironment:\n  sdk: ^3.13.0\n');
     Directory('${root.path}/.dart_tool').createSync();
-    Directory('${root.path}/flutter/lib/src/widgets').createSync(recursive: true);
-    File('${root.path}/flutter/lib/src/widgets/framework.dart').writeAsStringSync('''
+    Directory('${external.path}/flutter/lib/src/widgets').createSync(recursive: true);
+    File('${external.path}/flutter/lib/src/widgets/framework.dart').writeAsStringSync('''
 class BuildContext {}
 class Widget { const Widget(); }
 class Text extends Widget { const Text(); }
@@ -51,14 +53,28 @@ class Host {
     Widget Function(BuildContext)? transitionBuilder});
 }
 ''');
+    Directory('${external.path}/bloc/lib/src').createSync(recursive: true);
+    File('${external.path}/bloc/lib/bloc.dart').writeAsStringSync("export 'src/base.dart';");
+    File('${external.path}/bloc/lib/src/base.dart').writeAsStringSync('''
+abstract class Bloc<E, S> {}
+abstract class Cubit<S> {}
+''');
+    File('${external.path}/flutter/lib/foundation.dart')
+        .writeAsStringSync('class ChangeNotifier {}');
     File('${root.path}/.dart_tool/package_config.json').writeAsStringSync(
       jsonEncode({
         'configVersion': 2,
         'packages': [
           {'name': 'fixture', 'rootUri': '../', 'packageUri': 'lib/', 'languageVersion': '3.13'},
           {
+            'name': 'bloc',
+            'rootUri': Directory('${external.path}/bloc').uri.toString(),
+            'packageUri': 'lib/',
+            'languageVersion': '3.13',
+          },
+          {
             'name': 'flutter',
-            'rootUri': '../flutter/',
+            'rootUri': Directory('${external.path}/flutter').uri.toString(),
             'packageUri': 'lib/',
             'languageVersion': '3.13',
           },
@@ -71,6 +87,7 @@ class Host {
     return Fixture._(
       root,
       AnalysisContextCollection(includedPaths: [root.path], sdkPath: sdk.path),
+      external,
     );
   }
 
@@ -83,6 +100,7 @@ class Host {
   Future<void> dispose() async {
     await contexts.dispose();
     root.deleteSync(recursive: true);
+    external.deleteSync(recursive: true);
   }
 }
 

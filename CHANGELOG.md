@@ -1,3 +1,12 @@
+## 0.5.0
+
+- Replace architecture schema 1 with strict schema 2: explicit inclusion, exactly one layer per physical source, and deny-by-default dependency allowances. This is a breaking configuration change with no compatibility mode.
+- Enable architecture automatically as native analyzer warnings; add classification, general role restrictions, separate contract/injection checks, forbidden symbols and unverifiable-dependency diagnostics.
+- Recognize role base types by resolved identity, including actual Bloc/Cubit ancestry. Check own-package barrels and require explicit generated-source exclusions and reasoned policy exceptions.
+- Add read-only `verify_setup` to audit matching plugin/verifier installation, effective analyzer options, coverage and suppression attempts before native `dart analyze --format=machine --fatal-infos`.
+- Add ten explicit editable architecture templates, migration/reference documentation and an agent integration guide with a copyable consumer AGENTS.md snippet. Clean use cases remain optional.
+- Preserve opt-in style diagnostics and arrow-body quick fixes. Architecture has no custom analysis CLI or automatic fixes.
+
 ## 0.4.1
 
 - Add a discoverable example guide for pub.dev with setup and expected diagnostics.

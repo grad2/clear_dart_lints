@@ -10,10 +10,6 @@ import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/error/listener.dart';
 import 'package:analyzer/workspace/workspace.dart';
 import 'package:clear_dart_lints/src/rules/custom/avoid_nested_widget_ternaries.dart';
-import 'package:clear_dart_lints/src/rules/custom/depend_on_contracts.dart';
-import 'package:clear_dart_lints/src/rules/custom/layer_dependencies.dart';
-import 'package:clear_dart_lints/src/rules/custom/no_transport_in_domain.dart';
-import 'package:clear_dart_lints/src/rules/custom/repositories_only_in_blocs.dart';
 import 'package:clear_dart_lints/src/rules/effective_dart/avoid_nullable_async_returns.dart';
 import 'package:clear_dart_lints/src/rules/effective_dart/avoid_nullable_collection_returns.dart';
 import 'package:clear_dart_lints/src/rules/effective_dart/avoid_public_late_final_fields.dart';
@@ -128,9 +124,9 @@ Future<List<String>> check(
 
     final actual = await run();
     if (repeated) {
-      // Context cache intentionally survives a configuration edit until restart.
+      // Configuration edits must be observed without restarting the analysis context.
       File('${fixture.root.path}/clear_dart_lints.yaml').writeAsStringSync('[broken');
-      expect(await run(), actual);
+      expect(await run(), ['invalid_configuration']);
     }
     return actual;
   } finally {
@@ -138,51 +134,6 @@ Future<List<String>> check(
   }
 }
 
-const architecture = '''
-schema_version: 1
-layers:
-  presentation: ['main.dart']
-  data: ['lib/data/**']
-roles:
-  repository:
-    names: ['*Repository', '*RepositoryImpl']
-    libraries: ['lib/data/**']
-  bloc:
-    names: ['*Bloc']
-    libraries: ['main.dart']
-  transport:
-    names: ['ApiClient']
-    libraries: ['lib/data/**']
-rules:
-  layer_dependencies:
-    source_layers: [presentation]
-    forbidden:
-      - from: [presentation]
-        to: [data]
-        uris: ['dart:convert']
-  repositories_only_in_blocs:
-    source_layers: [presentation]
-    repository_roles: [repository]
-    allowed_consumer_roles: [bloc]
-    composition_roots: ['lib/assembly/**']
-  depend_on_contracts:
-    source_layers: [presentation]
-    dependency_roles: [repository]
-    composition_roots: ['lib/assembly/**']
-  no_transport_in_domain:
-    source_layers: [presentation]
-    transport_roles: [transport]
-    forbidden_symbols:
-      - library: dart:convert
-        name: jsonEncode
-      - library: dart:convert
-        name: json
-''';
-const repository = '''
-abstract class ItemRepository { void load(); }
-class ItemRepositoryImpl implements ItemRepository { void load() {} }
-class ApiClient {}
-''';
 void main() {
   test('late final public instance/static fields, initializer and override exceptions', () async {
     expect(
@@ -255,281 +206,13 @@ int h(bool a, bool b) => a ? (b ? 1 : 2) : 3;
       ['avoid_nested_widget_ternaries'],
     );
   });
-  for (final factory in <AbstractAnalysisRule Function()>[
-    LayerDependencies.new,
-    RepositoriesOnlyInBlocs.new,
-    DependOnContracts.new,
-    NoTransportInDomain.new,
-  ]) {
-    test('${factory().name} requires valid configuration', () async {
-      for (final config in <String?>[
-        null,
-        '[broken',
-        'schema_version: 2',
-        architecture.replaceFirst('layers:', 'unknown: true\nlayers:'),
-        architecture.replaceFirst('source_layers: [presentation]', 'source_layers: [missing]'),
-        architecture.replaceFirst('repository_roles: [repository]', 'repository_roles: [missing]'),
-      ]) {
-        expect(await check(factory(), 'void f() {}', config: config), ['invalid_configuration']);
-      }
-    });
-  }
-  test('dependency graph covers relative/package imports, conditional branches, cyclic exports and parts', () async {
-    final files = {
-      'lib/data/repository.dart': repository,
-      'lib/barrel.dart': "export 'cycle.dart'; export 'data/repository.dart';",
-      'lib/cycle.dart': "export 'barrel.dart';",
-      'lib/safe.dart': '',
-      'detail.dart': "part of 'main.dart';",
-    };
-    final rows = await check(
-      LayerDependencies(),
-      '''
-import 'package:fixture/barrel.dart';
-import 'lib/safe.dart' if (dart.library.io) 'lib/data/repository.dart';
-export 'lib/barrel.dart';
-part 'detail.dart';
-ItemRepository? value;
-''',
-      config: architecture,
-      files: files,
-      repeated: true,
-    );
-    expect(rows.length, 4);
-    expect(rows.toSet(), {'layer_dependencies'});
-  });
-  test('repository consumers, inheritance, getters and service location', () async {
-    final rows = await check(
-      RepositoriesOnlyInBlocs(),
-      '''
-import 'lib/data/repository.dart';
-abstract class BaseBloc {}
-class ItemsBloc extends BaseBloc { final ItemRepository repository; ItemsBloc(this.repository); }
-class Child extends ItemsBloc { Child(super.repository); }
-T locate<T>() => throw 0;
-class Screen { final repository = locate<ItemRepository>(); }
-void topLevel() { locate<ItemRepository>().load(); }
-''',
-      config: architecture,
-      files: {'lib/data/repository.dart': repository},
-    );
-    expect(rows, isNotEmpty);
-    expect(rows.toSet(), {'repositories_only_in_blocs'});
-    expect(
-      await check(
-        RepositoriesOnlyInBlocs(),
-        '''
-import 'lib/data/repository.dart';
-class ItemsBloc { final ItemRepository repository; ItemsBloc(this.repository); }
-''',
-        config: architecture,
-        files: {'lib/data/repository.dart': repository},
-      ),
-      isEmpty,
-    );
-  });
-  test(
-    'contracts accept constructor injection, reject construction and concrete parameters',
-    () async {
-      expect(
-        await check(
-          DependOnContracts(),
-          '''
-import 'lib/data/repository.dart';
-class Consumer { final ItemRepository repository; Consumer(this.repository); }
-''',
-          config: architecture,
-          files: {'lib/data/repository.dart': repository},
-        ),
-        isEmpty,
-      );
-      expect(
-        await check(
-          DependOnContracts(),
-          '''
-import 'lib/data/repository.dart';
-class Consumer { final ItemRepositoryImpl repository; Consumer(this.repository); }
-final item = ItemRepositoryImpl();
-''',
-          config: architecture,
-          files: {'lib/data/repository.dart': repository},
-        ),
-        isNotEmpty,
-      );
-    },
-  );
-  test(
-    'transport symbols resolve prefixes, aliases and original declarations through barrels',
-    () async {
-      expect(
-        await check(
-          NoTransportInDomain(),
-          '''
-import 'dart:convert' as c;
-import 'lib/barrel.dart';
-String encode(Object value) => c.jsonEncode(value);
-final codec = c.json;
-ApiClient? client;
-''',
-          config: architecture,
-          files: {
-            'lib/data/repository.dart': repository,
-            'lib/barrel.dart': "export 'data/repository.dart';",
-          },
-        ),
-        hasLength(3),
-      );
-      expect(
-        await check(
-          NoTransportInDomain(),
-          'String jsonEncode(Object value) => "";',
-          config: architecture,
-        ),
-        isEmpty,
-      );
-    },
-  );
-  test('exclusions, generated files and composition roots', () async {
-    for (final config in [
-      architecture.replaceFirst('layers:', "exclude: ['main.dart']\nlayers:"),
-      architecture.replaceAll("['lib/assembly/**']", "['main.dart']"),
-    ]) {
-      expect(
-        await check(
-          RepositoriesOnlyInBlocs(),
-          "import 'lib/data/repository.dart'; ItemRepository? r;",
-          config: config,
-          files: {'lib/data/repository.dart': repository},
-        ),
-        isEmpty,
-      );
-    }
-    expect(
-      await check(
-        LayerDependencies(),
-        "// GENERATED CODE - DO NOT MODIFY BY HAND\nimport 'dart:convert';",
-      ),
-      isEmpty,
-    );
-  });
-  test(
-    'constructor field initializers, inherited repository roles and concrete service location',
-    () async {
-      final files = {'lib/data/repository.dart': repository};
-      expect(
-        await check(
-          DependOnContracts(),
-          "import 'lib/data/repository.dart'; "
-          'class Consumer { late final ItemRepository repository; '
-          'Consumer(ItemRepository value) { repository = value; } }',
-          config: architecture,
-          files: files,
-        ),
-        isEmpty,
-      );
-      expect(
-        await check(
-          DependOnContracts(),
-          """
-import 'lib/data/repository.dart';
-class Consumer {
- final ItemRepository repository;
- Consumer(ItemRepository value) : repository = value;
-}
-""",
-          config: architecture,
-          files: files,
-        ),
-        isEmpty,
-      );
-      expect(
-        await check(
-          DependOnContracts(),
-          """
-import 'lib/data/repository.dart';
-T locate<T>() => throw 0;
-final dependency = locate<ItemRepository>();
-""",
-          config: architecture,
-          files: files,
-        ),
-        isNotEmpty,
-      );
-      expect(
-        await check(
-          RepositoriesOnlyInBlocs(),
-          """
-import 'lib/data/repository.dart';
-class Other extends ItemRepositoryImpl {}
-Other? dependency;
-""",
-          config: architecture,
-          files: files,
-        ),
-        isNotEmpty,
-      );
-    },
-  );
-  test('generated marker and optional excludes apply without architecture diagnostics', () async {
+  test('generated marker keeps optional style checks disabled', () async {
     expect(
       await check(
         AvoidNullableAsyncReturns(),
         '// GENERATED CODE - DO NOT MODIFY BY HAND\nFuture<int>? load() => null;',
       ),
       isEmpty,
-    );
-    expect(
-      await check(
-        AvoidNullableCollectionReturns(),
-        'List<int>? load() => null;',
-        config: architecture.replaceFirst('layers:', "exclude: ['main.dart']\nlayers:"),
-      ),
-      isEmpty,
-    );
-  });
-  test('role names must also match declaration library paths', () async {
-    const source = 'class ItemRepository {} ItemRepository? value;';
-    expect(await check(RepositoriesOnlyInBlocs(), source, config: architecture), isEmpty);
-    expect(await check(DependOnContracts(), source, config: architecture), isEmpty);
-  });
-  test('architecture checks use original declarations inside part files', () async {
-    const source = "import 'lib/data/repository.dart'; part 'detail.dart';";
-    final config = architecture.replaceFirst("['main.dart']", "['main.dart', 'detail.dart']");
-    final files = {
-      'lib/data/repository.dart': repository,
-      'detail.dart': "part of 'main.dart'; ItemRepository? dependency;",
-    };
-    for (final rule in [LayerDependencies(), RepositoriesOnlyInBlocs(), DependOnContracts()]) {
-      expect(await check(rule, source, config: config, files: files, target: 'detail.dart'), [
-        rule.name,
-      ]);
-    }
-  });
-  test('layer policy follows typedef expansion through nested type arguments', () async {
-    expect(
-      await check(
-        LayerDependencies(),
-        "import 'lib/contracts.dart'; Pending? load() => null;",
-        config: architecture,
-        files: {
-          'lib/data/repository.dart': repository,
-          'lib/contracts.dart':
-              "import 'data/repository.dart'; typedef Pending = Future<ItemRepository>;",
-        },
-      ),
-      ['layer_dependencies'],
-    );
-  });
-  test('transport symbol policy follows type aliases', () async {
-    final config = architecture.replaceFirst('name: jsonEncode', 'name: JsonEncoder');
-    expect(
-      await check(
-        NoTransportInDomain(),
-        "import 'lib/codec.dart'; Encoder? encoder;",
-        config: config,
-        files: {'lib/codec.dart': "import 'dart:convert'; typedef Encoder = JsonEncoder;"},
-      ),
-      ['no_transport_in_domain'],
     );
   });
 }

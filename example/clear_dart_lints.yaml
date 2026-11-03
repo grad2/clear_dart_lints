@@ -1,35 +1,35 @@
-schema_version: 1
+schema_version: 2
+include: ['lib/**']
 exclude: ['lib/excluded_conventions.dart']
 layers:
-  presentation: ['lib/new_rules.dart', 'lib/suppressed.dart', 'lib/excluded_conventions.dart']
+  example: ['lib/*.dart', 'lib/parts/**']
+  data: ['lib/data/**']
 roles:
   repository:
     names: ['ItemRepository', 'ItemRepositoryImpl']
     libraries: ['lib/new_rules.dart']
-  bloc:
+  manager:
     names: ['ItemsBloc']
-    libraries: ['lib/new_rules.dart']
-  transport:
-    names: ['ApiClient']
     libraries: ['lib/new_rules.dart']
 rules:
   layer_dependencies:
-    source_layers: [presentation]
-    forbidden:
-      - from: [presentation]
-        uris: ['dart:convert']
-  repositories_only_in_blocs:
-    source_layers: [presentation]
-    repository_roles: [repository]
-    allowed_consumer_roles: [bloc]
-    composition_roots: ['lib/assembly/**']
+    allowed:
+      - from: [example]
+        to: [example]
+        uris: ['dart:*', 'package:flutter/**']
+  role_dependencies:
+    restrictions:
+      - source_layers: [example]
+        dependency_roles: [repository]
+        allowed_consumer_roles: [manager]
   depend_on_contracts:
-    source_layers: [presentation]
+    source_layers: [example]
     dependency_roles: [repository]
-    composition_roots: ['lib/assembly/**']
-  no_transport_in_domain:
-    source_layers: [presentation]
-    transport_roles: [transport]
-    forbidden_symbols:
+  constructor_injection:
+    source_layers: [example]
+    dependency_roles: [repository]
+  forbidden_symbols:
+    source_layers: [example]
+    symbols:
       - library: dart:convert
         name: jsonEncode

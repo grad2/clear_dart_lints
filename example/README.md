@@ -1,63 +1,39 @@
 # clear_dart_lints example
 
-This Flutter project demonstrates all eleven opt-in diagnostics. It deliberately
-contains violations so you can inspect the diagnostics and try the quick fixes
-in your IDE. It is an analyzer fixture, not a runnable Flutter application.
+This Flutter project is an intentionally invalid analyzer fixture. It demonstrates optional style diagnostics and schema 2 architecture warnings in the IDE and native analyzer; it is not a runnable Flutter application or a clean consumer baseline.
 
-## Requirements and setup
+## Setup
 
-Use Dart >=3.13.0 <4.0.0 and a Flutter SDK containing a compatible Dart version.
-From a checkout of the package, run:
+Use Dart `>=3.13.0 <4.0.0` and a compatible Flutter SDK. From a checkout:
 
 ```sh
 dart pub get
 cd example
 flutter pub get
-dart analyze
+dart analyze --format=machine --fatal-infos
 ```
 
-The example's `analysis_options.yaml` installs the plugin from the parent
-directory and enables every diagnostic. `clear_dart_lints.yaml` supplies the
-architecture configuration. Restart the Dart Analysis Server after changing
-the plugin configuration.
+The analysis command is expected to fail because the fixture deliberately violates rules. Its `analysis_options.yaml` installs the native plugin from the parent directory and opts into styles. Its `clear_dart_lints.yaml` supplies the explicit schema 2 architecture policy. Architecture diagnostics are warnings automatically; optional styles remain informational. Restart the Analysis Server after changing plugin installation/options.
 
-To enable a published version in your own project's root `analysis_options.yaml`:
-
-```yaml
-formatter:
-  page_width: 100
-
-plugins:
-  clear_dart_lints:
-    version: ^0.4.1
-    diagnostics:
-      prefer_block_body_for_long_expression: true
-      prefer_block_body_for_build: true
-      one_public_class_per_file: true
-```
-
-Merge these settings with your existing configuration. The native plugin
-configuration installs the plugin; no application dependency is needed.
-See the [package guide](https://pub.dev/packages/clear_dart_lints) for all rules
-and the architecture configuration schema.
+For a real consumer project, start from a [complete architecture template](../templates/README.md) and follow the [agent integration guide, including the consumer AGENTS.md snippet](../docs/agent_integration.md). Pin matching plugin/verifier versions, adapt paths and approved dependencies, then require both `dart run clear_dart_lints:verify_setup` and `dart analyze --format=machine --fatal-infos` to succeed. This intentionally failing fixture is checked with its dedicated verifier instead.
 
 ## What to inspect
 
-| File under `lib/` | Expected result |
+| File under `lib/` | Purpose |
 | --- | --- |
-| `good.dart` | No diagnostics: block bodies in Flutter builders and a short arrow function elsewhere. |
-| `bad.dart` | Four `prefer_block_body_for_build` and two `prefer_block_body_for_long_expression` diagnostics. Both rules provide a Convert to block body quick fix. |
-| `multiple_classes.dart` | One `one_public_class_per_file` diagnostic. |
-| `parts/two.dart` | One `one_public_class_per_file` diagnostic; each physical part file is checked independently. |
-| `new_rules.dart` | Examples of all eight additional Effective Dart and custom rules, including architecture violations. These rules do not provide quick fixes. |
-| `suppressed.dart` | No diagnostics: line and file suppressions. |
-| `excluded_conventions.dart` | No diagnostics: excluded by the architecture configuration. |
-| `generated.g.dart` | No diagnostics: generated code is skipped. |
+| `good.dart` | Valid block bodies in Flutter builders and a short arrow function elsewhere. |
+| `bad.dart` | Arrow-body style violations; try **Convert to block body** in the IDE. |
+| `multiple_classes.dart` | Additional public class style diagnostic. |
+| `parts/two.dart` | Part-file class organization, checked per physical file. |
+| `new_rules.dart` | Effective Dart/style examples and schema 2 layer, role, contract, constructor-injection and forbidden-symbol violations. |
+| `data/internal.dart` | A local data target deliberately imported across a forbidden layer boundary by `new_rules.dart`. |
+| `suppressed.dart` | Standard suppressions for optional style diagnostics. |
+| `excluded_conventions.dart` | Explicit configuration exclusion. |
+| `generated.g.dart` | Generated-file behavior; architecture skips require explicit configuration, while optional styles retain their existing behavior. |
 
-Diagnostics are informational by default. `dart analyze --fatal-infos` makes
-them fail the command, which is expected for this intentionally invalid fixture.
+All included sources are classified in the example layer. This deliberately compact graph demonstrates rule behavior, not a recommended production layout. Use the templates to establish real UI/state/domain/data/core/app boundaries. See [configuration semantics and static limitations](../docs/configuration.md).
 
-## Verify the expected diagnostics
+## Verify expected diagnostics
 
 After resolving the example's Flutter dependencies, run from the package root:
 
@@ -65,6 +41,4 @@ After resolving the example's Flutter dependencies, run from the package root:
 dart run tool/verify_example.dart
 ```
 
-The verifier checks all eleven rules, part files, suppressions, exclusions and
-generated code. It repeats analysis with the existing cache and enables each
-additional rule independently, restoring the example configuration afterwards.
+The verifier works with a temporary copy and checks expected native architecture warning severity, optional styles, style suppressions, exclusions and repeated analysis. It validates an intentionally failing fixture; it does not replace the two-command setup/analyzer gate for consumer projects.

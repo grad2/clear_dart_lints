@@ -10,7 +10,11 @@ class Dependency {
 
 /// Explore every conditional branch and transitive export, including parts.
 /// Paths identify visited libraries even when reached through different URIs.
-Iterable<Dependency> dependencies(RuleContext context, Uri uri) sync* {
+Iterable<Dependency> dependencies(
+  RuleContext context,
+  Uri uri, {
+  bool Function(String path)? traverse,
+}) sync* {
   final seen = <String>{};
   final provider = context.currentUnit!.file.provider;
   final converter = context.libraryElement!.session.uriConverter;
@@ -19,7 +23,7 @@ Iterable<Dependency> dependencies(RuleContext context, Uri uri) sync* {
     if (!seen.add(path ?? current.toString())) return;
     final canonical = path == null ? current : converter.pathToUri(path) ?? current;
     yield Dependency(canonical, path);
-    if (path == null || current.scheme == 'dart') return;
+    if (path == null || current.scheme == 'dart' || (traverse != null && !traverse(path))) return;
     final file = provider.getFile(path);
     if (!file.exists) return;
     final unit = parseString(content: file.readAsStringSync(), throwIfDiagnostics: false).unit;

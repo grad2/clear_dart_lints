@@ -1,0 +1,74 @@
+# layered_cubit / layer_first
+# Copy this complete file; presets are editable examples, not runtime inheritance.
+# Setup, boundaries and agent workflow: ../../../docs/agent_integration.md
+schema_version: 2
+include: ['lib/**']
+exclude: ['lib/**/*.g.dart', 'lib/**/*.freezed.dart', 'lib/generated/**']
+layers:
+  ui: ["lib/presentation/views/**"]
+  state: ["lib/presentation/cubits/**"]
+  domain: ["lib/domain/**"]
+  data: ["lib/data/**"]
+  core: ["lib/core/**"]
+  app: ["lib/main.dart", "lib/app/**"]
+roles:
+  view:
+    paths: ["lib/presentation/views/**"]
+  state_manager:
+    types:
+      - library: package:bloc/bloc.dart
+        name: Cubit
+  repository:
+    names: ["*Repository", "*RepositoryImpl"]
+    libraries: ["lib/domain/repositories/**", "lib/data/repositories/**"]
+  data_source:
+    paths: ["lib/data/datasources/**"]
+rules:
+  layer_dependencies:
+    allowed:
+      - from: [ui]
+        to: ["ui", "state", "domain", "core"]
+        uris: ["dart:core", "dart:async", "dart:collection", "dart:math", "package:flutter/**", "package:flutter_bloc/**", "package:bloc/**"]
+      - from: [state]
+        to: ["state", "domain", "core"]
+        uris: ["dart:core", "dart:async", "dart:collection", "package:bloc/**"]
+      - from: [domain]
+        to: ["domain", "core"]
+        uris: ["dart:core", "dart:async", "dart:collection"]
+      - from: [data]
+        to: ["data", "domain", "core"]
+        uris: ["dart:*", "package:http/**"]
+      - from: [core]
+        to: ["core"]
+        uris: ["dart:core", "dart:async", "dart:collection"]
+      - from: [app]
+        to: ["ui", "state", "domain", "data", "core", "app"]
+        uris: ["dart:*", "package:flutter/**", "package:http/**", "package:flutter_bloc/**", "package:bloc/**"]
+  role_dependencies:
+    composition_roots: ['lib/main.dart', 'lib/app/**']
+    restrictions:
+      - source_layers: [ui, state, domain]
+        dependency_roles: [repository]
+        allowed_consumer_roles: [state_manager]
+      - source_layers: [state]
+        dependency_roles: [state_manager]
+        allowed_consumer_roles: []
+      - source_layers: [ui, state, domain, data]
+        dependency_roles: [data_source]
+        allowed_consumer_roles: [repository]
+  depend_on_contracts:
+    source_layers: [state]
+    dependency_roles: [repository]
+    composition_roots: ['lib/main.dart', 'lib/app/**']
+  constructor_injection:
+    source_layers: [state, data]
+    dependency_roles: [repository, data_source]
+    composition_roots: ['lib/main.dart', 'lib/app/**']
+  forbidden_symbols:
+    source_layers: [domain]
+    symbols:
+      - library: dart:convert
+        name: jsonDecode
+      - library: dart:convert
+        name: jsonEncode
+exceptions: []

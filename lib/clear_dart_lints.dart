@@ -1,4 +1,6 @@
-/// Native analyzer plugin for readable Dart and Flutter source code.
+/// Native analyzer plugin for strict Dart and Flutter architecture.
 library;
 
 export 'main.dart' show ClearDartLintsPlugin, plugin;
+
+export 'src/architecture/configuration.dart';

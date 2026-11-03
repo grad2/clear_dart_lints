@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 
+import 'data/internal.dart';
+
 abstract class ItemRepository {}
 
 class ItemRepositoryImpl implements ItemRepository {}
@@ -23,6 +25,7 @@ List<Item>? loadItems() => null;
 ItemRepository? repository;
 final concrete = ItemRepositoryImpl();
 final client = ApiClient();
+InternalData? internalData;
 String encodeItem(Object item) {
   return jsonEncode(item);
 }
