@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:clear_dart_lints/src/setup_verifier.dart';
+import 'package:yaml/yaml.dart';
 
 /// Exercises the native plugin on an isolated copy of the example.
 Future<void> main() async {
@@ -129,7 +130,17 @@ Future<void> main() async {
     if (fingerprint(rows).join('\n') != fingerprint(again).join('\n')) {
       throw StateError('Repeated analysis changed diagnostics: $again');
     }
-    options.writeAsStringSync('analyzer:\n  exclude: [lib/new_rules.dart]\n$original');
+    final originalOptions = Map<String, Object?>.from(loadYaml(original) as Map);
+    final analyzerOptions = Map<String, Object?>.from(originalOptions['analyzer'] as Map? ?? {});
+    options.writeAsStringSync(
+      jsonEncode({
+        ...originalOptions,
+        'analyzer': {
+          ...analyzerOptions,
+          'exclude': [...?analyzerOptions['exclude'] as List?, 'lib/new_rules.dart'],
+        },
+      }),
+    );
     final excluded = await diagnostics();
     if (excluded.any((r) => r[3].replaceAll('\\', '/').endsWith('/lib/new_rules.dart'))) {
       throw StateError('Analyzer exclusion failed: $excluded');

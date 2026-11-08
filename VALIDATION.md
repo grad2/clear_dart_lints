@@ -26,6 +26,12 @@ Environment: Dart 3.13.2, Flutter 3.47.2, macOS arm64.
 - The publish dry run identified the nonstandard `docs/` directory. Moved
   documentation to `doc/`, updated references, and verified all local Markdown
   link targets. Final publication validation must run from the release commit.
+- The first Linux CI runs exposed a duplicate `analyzer` mapping in the
+  temporary options used by the native exclusion check. The verifier now merges
+  analyzer options structurally, preserving existing settings and exclusions.
+  Failure reports include default-format analysis because Dart 3.13.2 omits
+  priority configuration errors from machine output. Native verification runs
+  before the longer unit suite so failures surface sooner.
 
 The initial Flutter launcher/analytics calls were sandbox-blocked before checks
 could complete; validation above used the bundled Dart SDK with cache access.
