@@ -1,6 +1,6 @@
 # Architecture configuration, schema 2
 
-Put one `clear_dart_lints.yaml` in the analyzed package root. Version 0.6.0 has no schema 1 compatibility, configuration inheritance, built-in preset selection, or app generator. Start from a complete [template](../templates/README.md), then edit it. The [agent integration guide](agent_integration.md) explains installation and the required verification commands.
+Put one `clear_dart_lints.yaml` in the analyzed package root. Version 0.6.1 has no schema 1 compatibility, configuration inheritance, built-in preset selection, or app generator. Start from a complete [template](../templates/README.md), then edit it. The [agent integration guide](agent_integration.md) explains installation and the required verification commands.
 
 Architecture runs as native analyzer warnings automatically when the plugin is installed. Its diagnostic codes are `invalid_configuration`, `unclassified_source`, `ambiguous_layer`, `layer_dependencies`, `role_dependencies`, `depend_on_contracts`, `constructor_injection`, `forbidden_symbols`, `unverifiable_dependency`, `feature_dependencies`, `unclassified_feature`, and `ambiguous_feature`, under the `clear_dart_lints/` prefix. Style diagnostics remain optional. The setup verifier rejects attempts to disable or lower architecture checks; it does not run an alternative architecture engine.
 
@@ -164,6 +164,16 @@ rules:
 
 These are fragments: define every referenced role in the complete file. `depend_on_contracts` checks that the dependency type used by a consumer is abstract, including nested generic types and inferred invocation results. A concrete generic wrapper is not itself a concrete repository. This check does not prove where the dependency was obtained. `constructor_injection` checks acquisition and field origin: constructor parameters, initializing formals, and supported assignments from constructor parameters establish injected fields. Creating a repository directly or obtaining it through a service locator is not constructor injection. Roots may construct implementations and inject them.
 
+Top-level functions can receive dependencies through their own explicit parameters.
+This does not exempt repository construction or locator calls inside the function;
+class methods and nested callbacks retain the constructor-injection policy. A
+nullable dependency may be explicitly absent through a literal `null`, including
+a constructor mode that uses a different injected loader. Each non-null field
+origin must still be injected. Nullability alone, conditional assignments and
+fallbacks to globals, factories or concrete implementations do not establish an
+injected origin; a later untrusted constructor assignment also invalidates an
+initial `null`.
+
 `constructor_injection` optionally accepts `allow_provider_reads: true` (boolean, default false). It additionally allows resolved `read`/`watch` methods from the Riverpod package on a Riverpod `Ref` receiver, including direct field initializers. It does not permit `ProviderContainer`, `WidgetRef`, same-named local methods, or arbitrary factory/service-locator calls. Layer, role and abstract-contract checks remain active. The option belongs only to `constructor_injection`; it is invalid on `depend_on_contracts`. See the complete [Riverpod templates and generation workflow](riverpod.md).
 
 ```dart
@@ -202,5 +212,11 @@ An exception has a diagnostic `rule`, nonempty source `paths`, and a nonempty hu
 ## Static boundary
 
 This is resolved static analysis, not a proof of runtime architecture. Dynamic/unresolved dependencies that cannot be classified can produce `unverifiable_dependency`; fix their types and resolution before considering an explicit, reasoned exception. Reflection, generated runtime wiring, behavior hidden inside an approved external library, runtime service-locator registration, and semantic business responsibilities are not fully established by source dependency checks. Neither passing analysis nor the setup audit proves that a class has the correct business responsibility.
+
+Record field reads, resolved index setters and calls through explicit function
+types (including nullable callbacks) use their static signatures. Record fields
+and function-type `call` need not have a declaration element to be verifiable.
+Unknown fields/methods, unresolved setters and operations on dynamic receivers
+remain unverifiable.
 
 The verifier audits setup, files and suppression comments; the native analyzer performs architecture checks. Both are required. The plugin rereads the policy on subsequent analysis. Restart the Analysis Server after installing/updating the plugin or changing plugin options; rerun both commands after policy changes.

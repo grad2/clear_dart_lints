@@ -4,6 +4,7 @@ import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/nullability_suffix.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:analyzer/error/error.dart';
 import 'package:analyzer/diagnostic/diagnostic.dart' show DiagnosticMessage;
@@ -60,7 +61,7 @@ class ArchitecturePolicy extends MultiAnalysisRule {
   );
   static const constructorInjection = ArchitectureCode(
     'constructor_injection',
-    'Receive dependencies through every constructor; assemble them in a composition root.',
+    'Pass dependencies explicitly; initialize class fields through constructors and assemble implementations in a composition root.',
   );
   static const forbiddenSymbols = ArchitectureCode(
     'forbidden_symbols',
@@ -449,6 +450,9 @@ class _Visitor extends SimpleAstVisitor<void> {
             selected(injection.sourceLayers) &&
             !rootMatch(injection.compositionRoots) &&
             hasRole(type, injection.dependencyRoles, nested: node is! InstanceCreationExpression)) {
+          final parameterKind = owner is TopLevelFunctionElement
+              ? 'an explicit function parameter'
+              : 'a constructor parameter';
           if (node is InstanceCreationExpression ||
               node is MethodInvocation ||
               node is FunctionExpressionInvocation) {
@@ -456,14 +460,15 @@ class _Visitor extends SimpleAstVisitor<void> {
               report(
                 node,
                 ArchitecturePolicy.constructorInjection,
-                '${owner?.name ?? '<top-level>'} must acquire ${type ?? element?.name ?? '<unresolved>'} through a constructor parameter${injection.allowProviderReads ? ' or Riverpod Ref.read/watch' : ''}.',
+                '${owner?.name ?? '<top-level>'} must acquire ${type ?? element?.name ?? '<unresolved>'} through $parameterKind${injection.allowProviderReads ? ' or Riverpod Ref.read/watch' : ''}.',
               );
             }
           }
           if (node is NamedType) {
             final parameter = node.thisOrAncestorOfType<FormalParameter>();
             if (parameter != null &&
-                parameter.thisOrAncestorOfType<ConstructorDeclaration>() == null) {
+                parameter.thisOrAncestorOfType<ConstructorDeclaration>() == null &&
+                !_topLevelParameter(parameter)) {
               report(
                 node,
                 ArchitecturePolicy.constructorInjection,
@@ -572,17 +577,27 @@ bool _providerRead(AstNode node) {
       );
 }
 
+bool _topLevelParameter(FormalParameter parameter) {
+  final function = parameter.thisOrAncestorOfType<FormalParameterList>()?.parent;
+  if (function is! FunctionExpression) return false;
+  final declaration = function.parent;
+  return declaration is FunctionDeclaration && declaration.parent is CompilationUnit;
+}
+
+bool _absentDependency(VariableElement field, Expression value) =>
+    field.type.nullabilitySuffix == NullabilitySuffix.question &&
+    unparenthesized(value) is NullLiteral;
+
 bool _injected(FieldDeclaration field, {bool allowProviderReads = false}) {
-  if (allowProviderReads &&
-      field.fields.variables.every((variable) {
-        final initializer = variable.initializer;
-        return initializer != null && _providerRead(unparenthesized(initializer));
-      })) {
-    return true;
-  }
   final owner = field.thisOrAncestorOfType<ClassDeclaration>();
   final body = owner?.body;
-  if (body is! BlockClassBody) return false;
+  if (body is! BlockClassBody) {
+    return allowProviderReads &&
+        field.fields.variables.every((variable) {
+          final initializer = variable.initializer;
+          return initializer != null && _providerRead(unparenthesized(initializer));
+        });
+  }
   final constructors = body.members
       .whereType<ConstructorDeclaration>()
       .where(
@@ -591,13 +606,23 @@ bool _injected(FieldDeclaration field, {bool allowProviderReads = false}) {
             constructor.declaredFragment?.element.redirectedConstructor == null,
       )
       .toList();
-  if (constructors.isEmpty) return false;
-  return field.fields.variables.every(
-    (variable) =>
-        variable.initializer == null &&
+  return field.fields.variables.every((variable) {
+    final element = variable.declaredFragment?.element;
+    if (element == null) return false;
+    final initializer = variable.initializer;
+    if (initializer != null) {
+      if (allowProviderReads && _providerRead(unparenthesized(initializer))) return true;
+      return _absentDependency(element, initializer) &&
+          constructors.every(
+            (constructor) => !_Assignments.inspect(element, constructor).untrusted,
+          );
+    }
+    return constructors.isNotEmpty &&
         constructors.every((constructor) {
           final element = constructor.declaredFragment?.element;
           if (element == null) return false;
+          final assignments = _Assignments.inspect(variable.declaredFragment!.element, constructor);
+          if (assignments.untrusted) return false;
           if (element.formalParameters.any(
             (parameter) =>
                 parameter is FieldFormalParameterElement &&
@@ -605,45 +630,56 @@ bool _injected(FieldDeclaration field, {bool allowProviderReads = false}) {
           )) {
             return true;
           }
-          final assignments = _Assignments(variable.declaredFragment!.element, element);
-          final constructorBody = constructor.body;
-          if (constructorBody is BlockFunctionBody) {
-            for (final statement in constructorBody.block.statements) {
-              if (statement is ExpressionStatement &&
-                  statement.expression is AssignmentExpression) {
-                assignments.visitAssignmentExpression(statement.expression as AssignmentExpression);
-              }
-            }
-          }
           return assignments.injected ||
               constructor.initializers.whereType<ConstructorFieldInitializer>().any((initializer) {
-                final value = initializer.expression;
+                final value = unparenthesized(initializer.expression);
                 return initializer.fieldName.name == variable.name.lexeme &&
-                    value is SimpleIdentifier &&
-                    value.element is FormalParameterElement &&
-                    value.element?.enclosingElement == element;
+                    (_absentDependency(variable.declaredFragment!.element, value) ||
+                        value is SimpleIdentifier &&
+                            value.element is FormalParameterElement &&
+                            value.element?.enclosingElement == element);
               });
-        }),
-  );
+        });
+  });
 }
 
 class _Assignments extends RecursiveAstVisitor<void> {
   final VariableElement field;
-  final ConstructorElement constructor;
+  final ConstructorElement? constructor;
+  final Block? block;
   bool injected = false;
-  _Assignments(this.field, this.constructor);
+  bool untrusted = false;
+  _Assignments(this.field, ConstructorDeclaration declaration)
+    : constructor = declaration.declaredFragment?.element,
+      block = declaration.body is BlockFunctionBody
+          ? (declaration.body as BlockFunctionBody).block
+          : null;
+  static _Assignments inspect(VariableElement field, ConstructorDeclaration declaration) {
+    final assignments = _Assignments(field, declaration);
+    assignments.block?.accept(assignments);
+    return assignments;
+  }
+
   @override
   void visitAssignmentExpression(AssignmentExpression node) {
     final target = node.writeElement;
     final variable = target is PropertyAccessorElement ? target.variable : target;
-    final right = node.rightHandSide;
-    if (node.operator.lexeme == '=' &&
-        variable?.baseElement == field.baseElement &&
-        right is SimpleIdentifier &&
-        right.element is FormalParameterElement &&
-        right.element?.enclosingElement == constructor) {
-      injected = true;
+    final right = unparenthesized(node.rightHandSide);
+    if (variable?.baseElement == field.baseElement) {
+      final trusted =
+          node.operator.lexeme == '=' &&
+          (_absentDependency(field, right) ||
+              right is SimpleIdentifier &&
+                  right.element is FormalParameterElement &&
+                  right.element?.enclosingElement == constructor);
+      untrusted |= !trusted;
+      // A conditional or deferred assignment cannot establish an initial origin.
+      final statement = node.parent;
+      if (trusted && statement is ExpressionStatement && identical(statement.parent, block)) {
+        injected = true;
+      }
     }
+    super.visitAssignmentExpression(node);
   }
 }
 
@@ -663,6 +699,18 @@ class _UnverifiableVisitor extends RecursiveAstVisitor<void> {
   final void Function(AstNode) report;
   _UnverifiableVisitor(this.report);
   bool dynamicTarget(Expression? expression) => expression?.staticType is DynamicType;
+
+  // Record fields and FunctionType.call have no declaration element. Recognize
+  // their static signatures instead of treating a missing element as dynamic.
+  bool recordField(Expression? target, SimpleIdentifier field) {
+    final type = target?.staticType;
+    if (type is! RecordType || field.inSetterContext()) return false;
+    if (type.namedFields.any((candidate) => candidate.name == field.name)) return true;
+    final positional = RegExp(r'^\$([1-9][0-9]*)$').firstMatch(field.name);
+    final index = positional == null ? null : int.tryParse(positional.group(1)!);
+    return index != null && index <= type.positionalFields.length;
+  }
+
   @override
   void visitNamedType(NamedType node) {
     if (node.element == null && node.name.lexeme != 'dynamic' && node.name.lexeme != 'void') {
@@ -679,14 +727,20 @@ class _UnverifiableVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitMethodInvocation(MethodInvocation node) {
-    if (dynamicTarget(node.realTarget) || node.methodName.element == null) report(node.methodName);
+    final functionCall =
+        node.methodName.name == 'call' && node.realTarget?.staticType is FunctionType;
+    if (dynamicTarget(node.realTarget) || node.methodName.element == null && !functionCall) {
+      report(node.methodName);
+    }
     super.visitMethodInvocation(node);
   }
 
   @override
   void visitPropertyAccess(PropertyAccess node) {
     if (dynamicTarget(node.realTarget) ||
-        node.propertyName.element == null && !_resolvedWrite(node)) {
+        node.propertyName.element == null &&
+            !_resolvedWrite(node) &&
+            !recordField(node.realTarget, node.propertyName)) {
       report(node.propertyName);
     }
     super.visitPropertyAccess(node);
@@ -694,7 +748,10 @@ class _UnverifiableVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitPrefixedIdentifier(PrefixedIdentifier node) {
-    if (dynamicTarget(node.prefix) || node.identifier.element == null && !_resolvedWrite(node)) {
+    if (dynamicTarget(node.prefix) ||
+        node.identifier.element == null &&
+            !_resolvedWrite(node) &&
+            !recordField(node.prefix, node.identifier)) {
       report(node.identifier);
     }
     super.visitPrefixedIdentifier(node);
@@ -702,7 +759,9 @@ class _UnverifiableVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitIndexExpression(IndexExpression node) {
-    if (dynamicTarget(node.realTarget) || node.element == null) report(node);
+    if (dynamicTarget(node.realTarget) || node.element == null && !_resolvedWrite(node)) {
+      report(node);
+    }
     super.visitIndexExpression(node);
   }
 

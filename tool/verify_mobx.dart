@@ -44,7 +44,7 @@ dev_dependencies:
         'analysis_options.yaml',
         File('templates/mvvm_mobx/$layout/analysis_options.yaml')
             .readAsStringSync()
-            .replaceFirst('version: 0.6.0', 'path: $packageRoot'),
+            .replaceFirst('version: 0.6.1', 'path: $packageRoot'),
       );
       write(
         'clear_dart_lints.yaml',

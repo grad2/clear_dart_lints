@@ -38,7 +38,7 @@ Expression unparenthesized(Expression expression) {
   return expression;
 }
 
-/// Follow resolved typedef expansion, including nested generic containers.
+/// Follow resolved typedefs, generic containers, function signatures and records.
 Iterable<InterfaceElement> referencedTypes(DartType? type) sync* {
   if (type is InterfaceType) {
     yield type.element;
@@ -49,6 +49,10 @@ Iterable<InterfaceElement> referencedTypes(DartType? type) sync* {
     yield* referencedTypes(type.returnType);
     for (final parameter in type.formalParameters) {
       yield* referencedTypes(parameter.type);
+    }
+  } else if (type is RecordType) {
+    for (final field in [...type.positionalFields, ...type.namedFields]) {
+      yield* referencedTypes(field.type);
     }
   }
 }

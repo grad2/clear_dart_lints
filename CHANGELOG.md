@@ -1,3 +1,9 @@
+## 0.6.1
+
+- Recognize positional/named record fields and typed nullable callback calls by their static signatures. Use resolved write elements for index assignments and updates.
+- Accept explicit dependency parameters on top-level functions while retaining constructor injection for class methods and nested callbacks, and rejecting repository construction or locator acquisition.
+- Treat explicit `null` in nullable dependency fields and constructor modes as absence. Preserve origin checks for non-null values and reject untrusted constructor overwrites.
+
 ## 0.6.0
 
 - Align published documentation with the standard `doc/` package layout and update all installation/template pins to 0.6.0.

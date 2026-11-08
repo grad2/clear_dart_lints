@@ -1,5 +1,57 @@
 # Validation history
 
+## 0.6.1 release preparation — 2026-11-08
+
+Environment: Dart 3.13.2, Flutter 3.47.2, macOS arm64.
+
+- Includes the five static-dependency fixes and 14 positive/negative regression
+  tests described below. The full 257-test fix verification remains applicable.
+- After updating to 0.6.1, all 29 focused setup, configuration/template and static
+  dependency regression tests passed.
+- `dart analyze --fatal-infos`: no issues. Formatting checked 68 Dart files
+  without changes; diff whitespace and local documentation links passed.
+- `dart run tool/verify_example.dart`: native warnings, setup, feature boundaries,
+  agent CLI, optional styles, secrets, exclusions and the clean gate passed.
+- `dart run tool/verify_riverpod.dart`: all four policy/layout combinations passed
+  setup, generated/manual provider sources and native clean/failing gates.
+- `dart run tool/verify_mobx.dart <flutter-executable>`: both layouts passed setup,
+  generated Stores, Flutter Observer and native warning gates.
+- Updated installation examples, all sixteen analyzer template pins, the example
+  lockfile and both framework verifier replacements to 0.6.1. The security rule's
+  historical introduction version remains 0.6.0.
+- Excluded local `.idea/` metadata from the published package. Consumer project
+  files and local IDE settings remain untouched.
+
+Publication validation is a clean-commit `dart pub publish --dry-run` gate before
+upload. GitHub PR checks run the full test suite and native example gate again.
+
+## Static dependency regression fixes — 2026-11-08
+
+Environment: Dart 3.13.2, macOS arm64. Package version remains 0.6.0;
+these changes are recorded as unreleased.
+
+- Reproduced the five reported false-positive categories using minimal resolved
+  sources: record fields, typed index writes, nullable function callbacks,
+  explicit top-level dependency parameters and nullable constructor modes.
+- Added 14 regression tests with valid positive fixtures and negative cases for
+  dynamic receivers, unknown record members, unresolved index setters/methods,
+  direct repository construction, locator acquisition, non-nullable null values,
+  conditional origins and constructor overwrites from globals.
+- Record field types are traversed so record-returning factories cannot hide
+  repository acquisition. Existing layer, role and abstract-contract checks stay
+  active; class methods and nested callbacks retain constructor injection.
+- Final `dart test --reporter expanded`: all 257 tests passed. A focused run of
+  the new cases, architecture policies and real Riverpod/MobX fixtures also
+  passed all 94 tests after adding record-container dependency checks.
+- `dart analyze --fatal-infos`: no issues. Formatting checked 68 Dart files
+  without changes, and `git diff --check` passed.
+- `dart run tool/verify_example.dart`: native warnings, setup, feature boundaries,
+  agent CLI, optional styles, secrets, exclusions and the clean gate passed on
+  isolated copies.
+
+Consumer project files were not modified. No commit, push, tag, release or package
+publication was performed during this local preparation.
+
 ## 0.6.0 release review — 2026-11-08
 
 Environment: Dart 3.13.2, Flutter 3.47.2, macOS arm64.

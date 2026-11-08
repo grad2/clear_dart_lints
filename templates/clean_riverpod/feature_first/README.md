@@ -1,6 +1,6 @@
 # clean_riverpod: feature_first
 
-Copy `clear_dart_lints.yaml` to the package root and merge `analysis_options.yaml` into the root options. Pin the matching verifier dev dependency to `0.6.0` as shown in the [agent integration guide](../../../doc/agent_integration.md). These are complete, editable schema 2 policies.
+Copy `clear_dart_lints.yaml` to the package root and merge `analysis_options.yaml` into the root options. Pin the matching verifier dev dependency to `0.6.1` as shown in the [agent integration guide](../../../doc/agent_integration.md). These are complete, editable schema 2 policies.
 
 Policy: View → provider/notifier → abstract Repository → DataSource. State providers may compose other state providers. Views cannot consume repositories, data sources or use cases through providers. Domain and core remain independent of Riverpod and Flutter; state cannot import data implementations.
 

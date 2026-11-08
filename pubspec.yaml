@@ -1,6 +1,6 @@
 name: clear_dart_lints
 description: Strict, configurable Dart and Flutter architecture linting with ready-to-use templates for coding agents and CI.
-version: 0.6.0
+version: 0.6.1
 repository: https://github.com/grad2/clear_dart_lints
 homepage: https://github.com/grad2/clear_dart_lints
 issue_tracker: https://github.com/grad2/clear_dart_lints/issues

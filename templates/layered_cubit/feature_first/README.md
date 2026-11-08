@@ -1,6 +1,6 @@
 # layered_cubit: feature_first
 
-Copy `clear_dart_lints.yaml` to the package root and merge `analysis_options.yaml` into the root options. Pin the matching verifier dev dependency to `0.6.0` as shown in the [agent integration guide](../../../doc/agent_integration.md). These files are explicit, editable configuration; no generator or runtime preset loader is involved.
+Copy `clear_dart_lints.yaml` to the package root and merge `analysis_options.yaml` into the root options. Pin the matching verifier dev dependency to `0.6.1` as shown in the [agent integration guide](../../../doc/agent_integration.md). These files are explicit, editable configuration; no generator or runtime preset loader is involved.
 
 Policy: View → Cubit → abstract Repository → DataSource. Domain entities/contracts use only the explicitly listed basic Dart libraries and `core`; data owns transport. The data example approves `package:http/**` only. Add specific package URI permissions where your real dependencies require them.
 
