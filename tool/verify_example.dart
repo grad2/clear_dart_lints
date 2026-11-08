@@ -55,8 +55,18 @@ Future<void> main() async {
         temp.path,
       ]);
       if (result.exitCode != 0 && result.exitCode != 1 && result.exitCode != 2) {
+        // Dart's machine output omits priority errors in analyzer options and
+        // pubspec.yaml. Preserve the failing gate and expose those diagnostics.
+        final detail = await Process.run(Platform.resolvedExecutable, [
+          '--suppress-analytics',
+          'analyze',
+          '--fatal-infos',
+          temp.path,
+        ]);
         throw StateError(
-          'Analyzer exited with ${result.exitCode}: ${result.stdout}\n${result.stderr}',
+          'Analyzer exited with ${result.exitCode}: ${result.stdout}\n${result.stderr}'
+          '\nDefault-format diagnostics (exit ${detail.exitCode}): '
+          '${detail.stdout}\n${detail.stderr}',
         );
       }
       if (result.stderr.toString().trim().isNotEmpty) {
