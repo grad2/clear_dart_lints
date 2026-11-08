@@ -2,15 +2,19 @@
 
 Strict architecture checks for Dart and Flutter projects, designed for developers, coding agents, and CI. Define which layers and roles may depend on each other in `clear_dart_lints.yaml`. The native Dart analyzer reports violations in the IDE and on the command line.
 
-Version **0.5.0** enables architecture warnings by default and requires schema 2. Effective Dart and style checks remain opt-in.
+Version **0.6.0** enables architecture warnings by default and requires schema 2. Effective Dart and style checks remain opt-in.
 
 ## Start here
 
-1. Choose [Layered Bloc, Layered Cubit, Clean Bloc, Clean Cubit or MVVM](templates/README.md), in feature-first or layer-first layout. Copy the complete YAML policy and merge the analyzer snippet.
-2. Follow the [agent integration guide](docs/agent_integration.md) for matching plugin/verifier installation, CI commands and a **copyable consumer AGENTS.md snippet**.
-3. Read [configuration semantics and static limitations](docs/configuration.md). Existing 0.4 users must follow the [breaking migration guide](docs/migration_0_5.md); schema 1 is not supported.
+1. Choose [Layered Bloc/Cubit/Riverpod, Clean Bloc/Cubit/Riverpod, MVVM or MVVM MobX](templates/README.md), in feature-first or layer-first layout. Copy the complete YAML policy and merge the analyzer snippet.
+2. Follow the [agent integration guide](doc/agent_integration.md) for matching plugin/verifier installation, CI commands and a **copyable consumer AGENTS.md snippet**.
+3. Read [configuration semantics and static limitations](doc/configuration.md). Existing 0.4 users must follow the [breaking migration guide](doc/migration_0_5.md); schema 1 is not supported.
 
-Clean use cases are optional: state managers may receive an abstract repository directly or through a use case. Bloc and Cubit presets recognize the corresponding resolved framework base identity, not merely a class-name suffix. Feature-spanning layer globs do not imply cross-feature isolation.
+Clean use cases are optional: state managers may receive an abstract repository directly or through a use case. Bloc and Cubit presets recognize the corresponding resolved framework base identity, not merely a class-name suffix. Feature-first templates additionally enable `feature_dependencies` to isolate features; layer globs alone do not provide that boundary.
+
+[Riverpod templates](doc/riverpod.md) support provider factories, functional providers, notifiers and code generation. They separate dependency assembly in `lib/di/`, allow resolved `Ref.read`/`Ref.watch` acquisition in state, and preserve abstract repository and layer boundaries.
+
+[MVVM MobX templates](doc/mobx.md) recognize resolved `Store` ancestry, support generated mixins and private Store bases, and keep repository/service dependencies constructor-injected.
 
 ## Requirements and installation
 
@@ -21,14 +25,14 @@ Pin the same version in the consumer's `pubspec.yaml` and `analysis_options.yaml
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  clear_dart_lints: 0.5.0
+  clear_dart_lints: 0.6.0
 ```
 
 ```yaml
 # analysis_options.yaml
 plugins:
   clear_dart_lints:
-    version: 0.5.0
+    version: 0.6.0
 ```
 
 Merge with existing options without duplicate keys. Keep inherited formatter settings. The plugin version must exactly match the verifier dependency; the audit rejects plugin version ranges that could resolve independently. A dev dependency alone does not install the native plugin. For local development, use the same `path: ../clear_dart_lints` directory in both entries. No `custom_lint` integration is required.
@@ -42,7 +46,22 @@ dart run clear_dart_lints:verify_setup &&
   dart analyze --format=machine --fatal-infos
 ```
 
-The first command audits setup, effective analyzer options, layer coverage and suppression comments without editing files or running analysis. It separately reports setup issues such as `missing_plugin`, `disabled_architecture` and `architecture_suppression` when architecture enforcement is hidden or weakened. The second command is the native analyzer and enforces both architecture warnings and enabled style infos. An optional package-root argument is accepted by `verify_setup`. For scripts, stop on the first failure. See the [full workflow](docs/agent_integration.md).
+The first command audits setup, effective analyzer options, layer coverage and suppression comments without editing files or running analysis. It separately reports setup issues such as `missing_plugin`, `disabled_architecture` and `architecture_suppression` when architecture enforcement is hidden or weakened. The second command is the native analyzer and enforces both architecture warnings and enabled style infos. An optional package-root argument is accepted by `verify_setup`. For scripts, stop on the first failure. See the [full workflow](doc/agent_integration.md).
+
+## Agent tools
+
+Read the [agent tools reference](doc/agent_tools.md) for path context, JSON output,
+conservative policy comparison and diagnostic repair examples. All tools are read-only.
+
+```sh
+dart run clear_dart_lints:context lib/features/catalog/domain/item.dart --format=json
+dart run clear_dart_lints:policy_diff --base origin/main --format=json
+dart run clear_dart_lints:verify_setup --format=json
+```
+
+A passing context lookup or policy comparison is not an architecture analysis.
+Keep the setup audit and native `dart analyze --format=machine --fatal-infos` gate.
+The public `package:clear_dart_lints/agent_tools.dart` API exposes typed results.
 
 ## Architecture policy
 
@@ -54,13 +73,15 @@ Schema 2 requires explicit source inclusion, exactly one layer per included none
 | `unclassified_source` | Require an included physical source to belong to a layer. |
 | `ambiguous_layer` | Require layer globs to be disjoint for included sources. |
 | `layer_dependencies` | Enforce allowed local layers and external library URIs. |
+| `feature_dependencies` | Enforce directed boundaries between features. |
+| `unclassified_feature` / `ambiguous_feature` | Require one feature, shared or composition-root scope when feature isolation is enabled. |
 | `role_dependencies` | Restrict which consumer roles may reference dependency roles. |
 | `depend_on_contracts` | Require abstract dependency types. |
-| `constructor_injection` | Require constructor acquisition and injected field origins. |
+| `constructor_injection` | Require constructor acquisition and injected field origins; optionally allow Riverpod `Ref` reads. |
 | `forbidden_symbols` | Forbid configured resolved declaration identities. |
 | `unverifiable_dependency` | Report dependency flows that cannot be verified statically. |
 
-All architecture diagnostics are warnings and automatically enabled. Composition roots are explicit per applicable rule; they do not waive layer classification or layer permissions. Exceptions need a supported rule, narrow source paths and a human-readable reason; configuration/classification failures cannot be excepted. See [all fields and their interactions](docs/configuration.md).
+All architecture diagnostics are warnings and automatically enabled. Composition roots are explicit per applicable rule; they do not waive layer classification or layer permissions. Exceptions need a supported rule, narrow source paths and a human-readable reason; configuration/classification failures cannot be excepted. See [all fields and their interactions](doc/configuration.md).
 
 ## Optional style diagnostics
 
@@ -77,6 +98,27 @@ Enable individual diagnostics under `plugins.clear_dart_lints.diagnostics`:
 | Custom style | `avoid_nested_widget_ternaries` | 0.4.0 |
 
 These diagnostics retain informational severity and their existing generated-file behavior; they do not replace architecture configuration. Architecture has no automatic code fixes.
+
+## Optional security diagnostic
+
+### avoid_hardcoded_secrets (0.6.0)
+
+Detect recognizable credential formats in Dart string literals. The rule is disabled by default; merge this entry into the existing plugin configuration:
+
+```yaml
+plugins:
+  clear_dart_lints:
+    diagnostics:
+      avoid_hardcoded_secrets: true
+```
+
+Findings have informational severity in the IDE and `dart analyze`. Use `dart analyze --fatal-infos` to fail the analysis gate when a secret is found. No automatic fix is provided. Diagnostic messages never include the matched value.
+
+Supported formats are GitHub classic and fine-grained PATs; GitLab classic and routable PATs; OpenAI legacy, project, service-account and admin keys; Stripe secret/restricted keys (`sk_`/`rk_`, including test keys); Slack bot/user tokens; and complete PEM/OpenSSH private-key blocks. Signatures are adapted from [Gitleaks](https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml), with its [MIT notice](third_party/gitleaks.LICENSE). No Gitleaks installation or additional runtime dependency is required.
+
+The rule checks decoded ordinary, raw and multiline strings, combines adjacent literals, and inspects static text in interpolated strings without joining across dynamic expressions. Each containing string receives at most one finding. It checks every Dart source passed to the plugin, including generated sources and sources outside the architecture policy. Architecture `include`/`exclude` settings do not affect this rule; analyzer exclusions and standard plugin `ignore`/`ignore_for_file` comments still apply.
+
+This is local format detection, without network validation, entropy checks or heuristics based on names such as `apiKey` or `password`. Synthetic values matching a supported format are also reported. Comments, evaluated expressions, other file formats and Git history are outside its scope. The rule does not install a Git hook or block commits by itself.
 
 ## Custom conventions
 

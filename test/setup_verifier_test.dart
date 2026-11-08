@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:clear_dart_lints/src/setup_verifier.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:yaml/yaml.dart';
 
 import 'body_rules_test.dart' show Fixture;
 
@@ -195,12 +196,13 @@ void main() {}
   test('exact plugin version must match the running verifier', () async {
     final fixture = await _fixture();
     addTearDown(fixture.dispose);
+    final version = loadYaml(File('pubspec.yaml').readAsStringSync())['version'];
     final options = File(p.join(fixture.root.path, 'analysis_options.yaml'));
     options.writeAsStringSync('plugins:\n  clear_dart_lints: 0.4.1\n');
     expect((await _audit(fixture)).issues.map((issue) => issue.code), contains('plugin_version'));
-    options.writeAsStringSync('plugins:\n  clear_dart_lints: ^0.5.0\n');
+    options.writeAsStringSync('plugins:\n  clear_dart_lints: ^$version\n');
     expect((await _audit(fixture)).issues.map((issue) => issue.code), contains('plugin_version'));
-    options.writeAsStringSync('plugins:\n  clear_dart_lints: 0.5.0\n');
+    options.writeAsStringSync('plugins:\n  clear_dart_lints: $version\n');
     expect((await _audit(fixture)).issues.map((issue) => issue.message), isEmpty);
   });
 

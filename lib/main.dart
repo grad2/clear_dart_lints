@@ -9,6 +9,7 @@ import 'src/rules/custom/avoid_nested_widget_ternaries.dart';
 import 'src/rules/effective_dart/avoid_nullable_async_returns.dart';
 import 'src/rules/effective_dart/avoid_nullable_collection_returns.dart';
 import 'src/rules/effective_dart/avoid_public_late_final_fields.dart';
+import 'src/rules/security/avoid_hardcoded_secrets.dart';
 
 final plugin = ClearDartLintsPlugin();
 
@@ -26,6 +27,7 @@ class ClearDartLintsPlugin extends Plugin {
     registry.registerLintRule(AvoidNullableCollectionReturns());
     registry.registerLintRule(AvoidNullableAsyncReturns());
     registry.registerLintRule(AvoidPublicLateFinalFields());
+    registry.registerLintRule(AvoidHardcodedSecrets());
     registry.registerFixForRule(PreferBlockBodyForLongExpression.code, ConvertToBlock.new);
     registry.registerFixForRule(PreferBlockBodyForBuild.code, ConvertToBlock.new);
   }

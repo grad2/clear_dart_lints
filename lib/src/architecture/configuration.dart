@@ -2,6 +2,15 @@ import 'package:glob/glob.dart';
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
+import 'features.dart';
+export 'features.dart';
+
+/// Location of a policy value, measured directly from its YAML span.
+class PolicyLocation {
+  final int offset, length, line, column;
+  const PolicyLocation(this.offset, this.length, this.line, this.column);
+}
+
 String _norm(String s) => s.replaceAll('\\', '/');
 bool matchesPatterns(Iterable<String> patterns, String value) =>
     patterns.any((s) => Glob(_norm(s)).matches(_norm(value)));
@@ -35,7 +44,13 @@ class RoleDependencies {
 
 class DependencyRule {
   final List<String> sourceLayers, dependencyRoles, compositionRoots;
-  const DependencyRule(this.sourceLayers, this.dependencyRoles, this.compositionRoots);
+  final bool allowProviderReads;
+  const DependencyRule(
+    this.sourceLayers,
+    this.dependencyRoles,
+    this.compositionRoots, {
+    this.allowProviderReads = false,
+  });
 }
 
 class ForbiddenSymbolsRule {
@@ -49,13 +64,15 @@ class ArchitectureRules {
   final RoleDependencies? roleDependencies;
   final DependencyRule? dependOnContracts, constructorInjection;
   final ForbiddenSymbolsRule? forbiddenSymbols;
+  final FeatureDependencies? featureDependencies;
   const ArchitectureRules(
     this.layerDependencies,
     this.roleDependencies,
     this.dependOnContracts,
     this.constructorInjection,
-    this.forbiddenSymbols,
-  );
+    this.forbiddenSymbols, {
+    this.featureDependencies,
+  });
 }
 
 class ArchitectureException {
@@ -71,6 +88,7 @@ class ArchitectureConfiguration {
   final Map<String, RoleSpec> roles;
   final ArchitectureRules rules;
   final List<ArchitectureException> exceptions;
+  final Map<String, PolicyLocation> locations;
   const ArchitectureConfiguration(
     this.root,
     this.include,
@@ -78,8 +96,9 @@ class ArchitectureConfiguration {
     this.layers,
     this.roles,
     this.rules,
-    this.exceptions,
-  );
+    this.exceptions, {
+    this.locations = const {},
+  });
   String relative(String path) => _norm(p.isAbsolute(path) ? p.relative(path, from: root) : path);
   bool includes(String path) => matchesPatterns(include, relative(path));
   bool excluded(String path) => matchesPatterns(exclude, relative(path));
@@ -91,8 +110,10 @@ class ArchitectureConfiguration {
       exceptions.any((e) => e.rule == rule && matchesPatterns(e.paths, relative(path)));
   static ArchitectureConfiguration parse(String content, {required String root}) {
     dynamic yaml;
+    late YamlNode yamlNode;
     try {
-      yaml = loadYaml(content);
+      yamlNode = loadYamlNode(content);
+      yaml = yamlNode.value;
     } on YamlException catch (error) {
       throw FormatException('Invalid YAML: $error');
     }
@@ -148,6 +169,7 @@ class ArchitectureConfiguration {
       'depend_on_contracts',
       'constructor_injection',
       'forbidden_symbols',
+      'feature_dependencies',
     });
     final ld = _map(rule['layer_dependencies'], 'rules.layer_dependencies', {'allowed'});
     final allowed = <LayerAllowance>[];
@@ -190,11 +212,18 @@ class ArchitectureConfiguration {
         'source_layers',
         'dependency_roles',
         'composition_roots',
+        if (name == 'constructor_injection') 'allow_provider_reads',
       });
+      final providerReads = m['allow_provider_reads'] ?? false;
+      if (providerReads is! bool ||
+          m.containsKey('allow_provider_reads') && m['allow_provider_reads'] == null) {
+        throw FormatException('rules.$name.allow_provider_reads must be a boolean.');
+      }
       return DependencyRule(
         refs(m['source_layers'], '$name.source_layers', layers),
         refs(m['dependency_roles'], '$name.dependency_roles', roles),
         _strings(m['composition_roots'] ?? [], '$name.composition_roots', empty: true),
+        allowProviderReads: providerReads,
       );
     }
 
@@ -209,6 +238,39 @@ class ArchitectureConfiguration {
         _symbols(m['symbols'], 'forbidden_symbols.symbols'),
       );
     }
+    FeatureDependencies? features;
+    if (rule.containsKey('feature_dependencies')) {
+      const key = 'rules.feature_dependencies';
+      final m = _map(rule['feature_dependencies'], key, {
+        'feature_paths',
+        'shared_paths',
+        'composition_roots',
+        'allowed',
+      });
+      List<String> names(dynamic value, String field) {
+        final result = _strings(value, field);
+        if (result.any((s) => s == '.' || s == '..' || RegExp(r'[/\\*?\[\]{}]').hasMatch(s))) {
+          throw FormatException('$field requires literal feature names.');
+        }
+        return result;
+      }
+
+      features = FeatureDependencies(
+        _list(
+          m['feature_paths'],
+          '$key.feature_paths',
+        ).map((v) => FeaturePattern(_string(v, '$key.feature_paths'))).toList(),
+        _strings(m['shared_paths'] ?? [], '$key.shared_paths', empty: true),
+        _strings(m['composition_roots'] ?? [], '$key.composition_roots', empty: true),
+        [
+          for (final entry in _list(m['allowed'] ?? [], '$key.allowed', empty: true))
+            FeatureAllowance(
+              names(_map(entry, '$key.allowed', {'from', 'to'})['from'], '$key.allowed.from'),
+              names(_map(entry, '$key.allowed', {'from', 'to'})['to'], '$key.allowed.to'),
+            ),
+        ],
+      );
+    }
     final exceptions = <ArchitectureException>[];
     for (final v in _list(doc['exceptions'] ?? [], 'exceptions', empty: true)) {
       final m = _map(v, 'exceptions', {'rule', 'paths', 'reason'});
@@ -220,6 +282,7 @@ class ArchitectureConfiguration {
         'constructor_injection',
         'forbidden_symbols',
         'unverifiable_dependency',
+        'feature_dependencies',
       }.contains(name)) {
         throw FormatException('exceptions.rule: unknown rule $name.');
       }
@@ -237,10 +300,42 @@ class ArchitectureConfiguration {
       exclude,
       layers,
       roles,
-      ArchitectureRules(allowed, rd, dep('depend_on_contracts'), dep('constructor_injection'), fs),
+      ArchitectureRules(
+        allowed,
+        rd,
+        dep('depend_on_contracts'),
+        dep('constructor_injection'),
+        fs,
+        featureDependencies: features,
+      ),
       exceptions,
+      locations: _locations(yamlNode),
     );
   }
+}
+
+Map<String, PolicyLocation> _locations(YamlNode root) {
+  final result = <String, PolicyLocation>{};
+  void visit(YamlNode node, String key) {
+    result[key] = PolicyLocation(
+      node.span.start.offset,
+      node.span.length,
+      node.span.start.line + 1,
+      node.span.start.column + 1,
+    );
+    if (node is YamlMap) {
+      for (final entry in node.nodes.entries) {
+        visit(entry.value, key.isEmpty ? '${entry.key.value}' : '$key.${entry.key.value}');
+      }
+    } else if (node is YamlList) {
+      for (var i = 0; i < node.nodes.length; i++) {
+        visit(node.nodes[i], '$key[$i]');
+      }
+    }
+  }
+
+  visit(root, '');
+  return Map.unmodifiable(result);
 }
 
 Map<String, dynamic> _map(dynamic v, String key, [Set<String>? allowed]) {

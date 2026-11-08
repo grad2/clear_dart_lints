@@ -1,5 +1,139 @@
 # Validation history
 
+## 0.6.0 release review — 2026-11-08
+
+Environment: Dart 3.13.2, Flutter 3.47.2, macOS arm64.
+
+- Reviewed the architecture/feature policy changes, public agent API and CLI,
+  secret recognizers, Riverpod/MobX templates and regression coverage.
+- `dart test --reporter expanded`: all 243 tests passed. After replacing the
+  fixed version in the setup regression with the package manifest version,
+  all 12 setup-verifier tests passed again.
+- `dart analyze --fatal-infos`: no issues. Formatting checked 67 Dart files
+  without changes; `git diff --check` passed.
+- `dart run tool/verify_example.dart`: setup audit, native warnings, feature
+  boundaries, consumer agent CLI, optional styles, secrets, exclusions and
+  the clean analyzer gate passed on isolated copies.
+- `dart run tool/verify_riverpod.dart`: all four policy/layout combinations
+  passed setup and native clean/failing analyzer gates.
+- `dart run tool/verify_mobx.dart <flutter-executable>`: both layouts passed
+  setup, real generated Stores, Flutter Observer and native warning gates.
+- The example JSON setup audit passed with 10 checked Dart files. Policy
+  comparison against `760eef759ca830004e920fb10215c974ee4f63da` passed without
+  example policy changes.
+- Updated all current installation/template pins to 0.6.0. The historical
+  0.5 migration guide retains its version-specific instructions.
+- The publish dry run identified the nonstandard `docs/` directory. Moved
+  documentation to `doc/`, updated references, and verified all local Markdown
+  link targets. Final publication validation must run from the release commit.
+
+The initial Flutter launcher/analytics calls were sandbox-blocked before checks
+could complete; validation above used the bundled Dart SDK with cache access.
+The package keeps schema 2, and feature isolation remains optional for existing
+policies. Secret recognition is opt-in and never validates credentials online.
+
+## Agent tools and feature boundaries — 2026-11-08
+
+Environment: Dart 3.13.2, Flutter 3.47.2, macOS arm64. Existing Riverpod,
+MobX and secret-detection work was retained and included in regression checks.
+
+- The resolved `package:test` runner (`--reporter expanded`) passed all **243
+  tests**. Coverage includes the CLI JSON contract and exit codes, future paths,
+  symlink traversal, suppression coordinates, conservative semantic comparison,
+  temporary Git repositories, nested packages, missing baselines, all sixteen
+  templates, feature isolation and existing architecture/style regressions.
+- Focused policy-comparison and architecture-diagnostic regressions were also
+  checked after refining exception reasons and inferred dependency locations.
+- `dart analyze --fatal-infos`: no issues.
+- `dart run tool/verify_example.dart`: native warning severity for all three
+  feature diagnostics, explicit cross-feature permission, existing architecture,
+  optional styles/secret detection, and documented consumer `context` and
+  `verify_setup` JSON commands passed on isolated copies.
+- `dart run tool/verify_riverpod.dart`: all four policies/layouts passed native
+  clean/failing gates with manual and generated providers/notifiers.
+- `dart run tool/verify_mobx.dart <flutter-executable>`: both layouts passed
+  setup, generated Store, Flutter Observer and native warning checks.
+- Native checks used normal Dart/Flutter cache access. An initial sandboxed
+  analyzer could not create its global plugin cache and was stopped and rerun
+  successfully with cache access. No passing result is claimed for that attempt.
+- Formatting, diff whitespace and local documentation links were checked.
+
+The policy remains schema 2. Existing configurations without feature isolation
+retain their behavior; all eight feature-first templates opt in. Policy comparison
+is deliberately conservative about glob containment and selector changes. These
+read-only commands do not replace native architecture analysis. No commit, tag,
+push or publication was performed.
+
+## MVVM MobX templates — 2026-11-08
+
+Environment: Dart 3.13.2, macOS arm64. Generator regressions use MobX 2.7.0,
+mobx_codegen 2.7.8 and build_runner 2.16.2; dependency resolution selected
+compatible build 4.0.11/build_config 1.3.3 without changing analyzer 14.5.0.
+MobX/generator dependencies remain development-only. Native Flutter consumers
+use flutter_mobx 2.4.0.
+
+- `dart test --reporter expanded`: all 154 tests passed. The 23 added tests
+  include both MobX template layouts, real Store identity, manual Stores,
+  generated named mixin applications and explicit subclasses, constructor
+  forwarding, abstract dependencies, service boundaries, UI repository leaks,
+  sibling Store restrictions, inheritance layer checks and resolved updates.
+- A runtime regression verifies generated observable/computed state,
+  synchronous/async actions and reaction notifications/disposers.
+- Real `mobx_codegen` output is checked in beside its private handwritten Store
+  bases. Both MobX and existing Riverpod fixtures were regenerated together
+  using `dart run build_runner build --build-filter='test/fixtures/**/*.g.dart'`
+  and formatted. Missing parts are not suppressed or replaced with stubs.
+- `dart run tool/verify_mobx.dart <flutter-executable>`: both layouts passed
+  setup audits and native analysis in temporary Flutter consumers with real
+  Observer widgets, generated Stores and constructor-injected dependencies.
+  UI repository access and concrete Store acquisitions produced the expected
+  architecture warnings and failing analyzer gates. Normal Flutter dependency
+  and Dart plugin cache access was enabled for native verification.
+- `dart run tool/verify_example.dart`: existing native warnings, optional styles,
+  exclusions, repeated analysis and clean gates passed.
+- `dart run tool/verify_riverpod.dart`: all four Riverpod layout/policy
+  combinations passed native clean/failing gates after the shared engine changes.
+- `dart analyze --fatal-infos`: no issues.
+- `dart format --output=none --set-exit-if-changed lib bin test tool example/lib`:
+  55 files checked, no changes. `git diff --check`: clean. Local links in all
+  updated guides and both MobX template READMEs resolve.
+
+The MobX policies retain strict constructor injection. Generated parts are
+explicitly excluded as sources; handwritten bases and dependency edges remain
+checked. The checks do not prove action coverage, Observer tracking or reaction
+lifetimes. No commit, tag, push or package publication was performed.
+
+## Riverpod templates — 2026-11-08
+
+Environment: Dart 3.13.2, macOS arm64. Regression dependencies resolved to
+Riverpod 3.5.0, riverpod_annotation 4.0.8, riverpod_generator 4.0.10 and
+build_runner 2.17.1. These are development dependencies only.
+
+- `dart test --reporter expanded`: all 131 tests passed, including 38 new
+  Riverpod behavior tests across Layered/Clean and feature-first/layer-first.
+  Existing Bloc, Cubit, MVVM, setup, style and quick-fix regressions passed.
+- `dart analyze --fatal-infos`: no issues.
+- Real `riverpod_generator` output covers dependency providers, synchronous,
+  asynchronous, stream and family functions, and generated sync/async/stream
+  notifiers. The checked-in parts are resolved by tests together with their
+  handwritten sources; those sources must have no analyzer diagnostics.
+- `dart run tool/verify_riverpod.dart`: all four policies passed the setup audit
+  and native analysis of manual/generated consumers. UI repository reads and
+  concrete state acquisitions produced native warning diagnostics and a failing
+  analyzer gate. Temporary consumer roots use canonical filesystem paths.
+- `dart run tool/verify_example.dart`: setup audit, native warnings, existing
+  optional styles, exclusions, repeated analysis and the clean gate passed.
+  Native verification required access to Dart's plugin cache outside the
+  workspace; sandboxed attempts were stopped and rerun with cache access.
+- `dart format --output=none --set-exit-if-changed lib bin test tool example/lib`:
+  48 files checked, no changes. `git diff --check`: clean. Local links in the
+  updated guides and all four Riverpod template READMEs resolve.
+
+Provider/notifier folder roles intentionally trust matching declarations,
+including helpers. Generated files are explicitly excluded as sources;
+handwritten sources, layer edges and abstract dependency types remain checked.
+No commit, tag, push or package publication was performed.
+
 ## 0.5.0 architecture rework — 2026-11-03
 
 Environment: Dart 3.13.2, Flutter 3.47.2, macOS arm64.

@@ -14,6 +14,7 @@ import 'package:pub_semver/pub_semver.dart';
 import 'package:yaml/yaml.dart';
 
 import 'architecture/configuration.dart';
+import 'agent_tools/result.dart';
 
 const _pluginName = 'clear_dart_lints';
 const _architectureCodes = {
@@ -27,15 +28,21 @@ const _architectureCodes = {
   'constructor_injection',
   'forbidden_symbols',
   'unverifiable_dependency',
+  'feature_dependencies',
+  'unclassified_feature',
+  'ambiguous_feature',
 };
 
 /// A configuration or source suppression that prevents a trustworthy check.
-class SetupIssue {
-  final String code;
-  final String path;
-  final String message;
-
-  const SetupIssue(this.code, this.path, this.message);
+class SetupIssue extends ToolIssue {
+  const SetupIssue(
+    super.code,
+    super.path,
+    super.message, {
+    super.filePath,
+    super.line,
+    super.column,
+  });
 }
 
 /// Result of the read-only setup audit, not an architecture analysis result.
@@ -47,6 +54,8 @@ class SetupVerification {
     : issues = List.unmodifiable(issues);
 
   bool get passed => issues.isEmpty;
+
+  Map<String, Object?> toJson() => {'checked_files': checkedFiles, 'architecture_checked': false};
 }
 
 /// Validates the physical package scope, effective analyzer setup and ignores.
@@ -182,6 +191,14 @@ Future<SetupVerification> verifySetup(
           'Expected exactly one architecture layer, found ${layers.length}. Update the architecture configuration.',
         );
       }
+      final membership = policy.rules.featureDependencies?.membership(policy.relative(path));
+      if (membership != null && !membership.valid) {
+        problem(
+          membership.count == 0 ? 'unclassified_feature' : 'ambiguous_feature',
+          path,
+          'Expected exactly one feature scope, found ${membership.count}. Update rules.feature_dependencies.',
+        );
+      }
       try {
         // contextFor deliberately rejects excluded files. Locate their owning
         // context too, so exclusions cannot make physical scope disappear.
@@ -278,10 +295,15 @@ Future<SetupVerification> verifySetup(
               _ => 0,
             };
             final location = unit.lineInfo.getLocation(offset);
-            problem(
-              'architecture_suppression',
-              '$path:${location.lineNumber}:${location.columnNumber}',
-              'Architecture warnings cannot be suppressed in source. Use a reasoned exception in clear_dart_lints.yaml.',
+            issues.add(
+              SetupIssue(
+                'architecture_suppression',
+                '$path:${location.lineNumber}:${location.columnNumber}',
+                'Architecture warnings cannot be suppressed in source. Use a reasoned exception in clear_dart_lints.yaml.',
+                filePath: path,
+                line: location.lineNumber,
+                column: location.columnNumber,
+              ),
             );
           }
         }

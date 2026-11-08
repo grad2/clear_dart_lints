@@ -49,6 +49,39 @@ class ItemRepositoryImpl implements ItemRepository { void load() {} }
 const files = {'lib/data/repository.dart': repo};
 
 void main() {
+  test('named mixin application inheritance still obeys layer permissions', () async {
+    final config = policy.replaceFirst('to: [ui, data]', 'to: [ui]');
+    final result = await check(
+      ArchitecturePolicy(),
+      "import 'lib/data/repository.dart'; mixin M {} abstract class Other = ItemRepository with M;",
+      config: config,
+      files: files,
+      requireValid: true,
+    );
+    expect(result, contains('layer_dependencies'));
+    expect(result, isNot(contains('role_dependencies')));
+  });
+
+  test('resolved updates are verifiable while dynamic property updates remain reported', () async {
+    expect(
+      await check(
+        ArchitecturePolicy(),
+        'class Counter { int count = 0; void update() { count++; ++count; count += 1; } }',
+        config: policy,
+        requireValid: true,
+      ),
+      isEmpty,
+    );
+    expect(
+      await check(
+        ArchitecturePolicy(),
+        'void update(dynamic value) { value.count++; ++value.count; }',
+        config: policy,
+        requireValid: true,
+      ),
+      contains('unverifiable_dependency'),
+    );
+  });
   test('missing and invalid config report one warning', () async {
     expect(await check(ArchitecturePolicy(), 'void f() {}'), ['invalid_configuration']);
     expect(await check(ArchitecturePolicy(), 'void f() {}', config: 'schema_version: 1'), [
@@ -248,6 +281,21 @@ void main() {
         "import 'lib/data/repository.dart'; final ItemRepository global = ItemRepositoryImpl(); class ItemsManager { final value = global; }",
         config: policy,
         files: files,
+        inspectDiagnostics: (diagnostics) {
+          final field = diagnostics.firstWhere(
+            (d) =>
+                d.diagnosticCode.lowerCaseName == 'constructor_injection' &&
+                d.problemMessage
+                    .messageText(includeUrl: false)
+                    .contains('through every constructor'),
+          );
+          expect(
+            field.contextMessages.any(
+              (m) => m.filePath.endsWith('lib/data/repository.dart') && m.offset > 0,
+            ),
+            isTrue,
+          );
+        },
       );
       expect(global, contains('constructor_injection'), reason: 'global field origin');
       final parameter = await check(

@@ -1,3 +1,19 @@
+## 0.6.0
+
+- Align published documentation with the standard `doc/` package layout and update all installation/template pins to 0.6.0.
+
+- Add read-only `context` and `policy_diff` executables, versioned JSON output for all agent commands, and the public `agent_tools.dart` API.
+- Add optional schema 2 feature boundaries with automatic path captures, directed permissions, shared/composition scopes, native warnings and suppression auditing. Enable isolation in all eight feature-first templates.
+- Enrich architecture diagnostics with rule-specific corrections, policy YAML spans, source/target layers and declaration locations. Add agent repair examples and a conservative CI policy-change gate.
+- Add opt-in `avoid_hardcoded_secrets` for recognizable credentials and complete private-key blocks in Dart strings, including generated sources, adjacent literals and static interpolation fragments. Findings have informational severity and never include the matched value.
+- Add MVVM MobX templates in feature-first and layer-first layouts, with resolved `Store` roles, constructor injection, generated private-base/wrapper examples and Flutter Observer verification.
+- Treat named mixin application superclasses as inheritance without waiving layer checks. Recognize resolved prefix/postfix updates and property writes when checking unverifiable dependencies.
+- Add real MobX generator fixtures, runtime reactive-state regressions, resolved architecture tests and a native Flutter-consumer verification tool.
+- Add Layered Riverpod and Clean Riverpod templates in feature-first and layer-first layouts, with a dedicated DI layer, provider composition, optional use cases, and manual/generated provider and notifier examples.
+- Apply declaration roles to top-level functions, getters and variables, including provider factory callbacks. Preserve class-based roles and require top-level consumers to match their own declaration selectors.
+- Add opt-in `constructor_injection.allow_provider_reads` for resolved Riverpod `Ref.read`/`Ref.watch`; keep contract and layer enforcement active, including inferred concrete provider results and nested generic dependencies.
+- Recognize resolved setter assignments when checking unverifiable dependencies, including notifier `state` updates. Add regressions using real Riverpod packages and generator output.
+
 ## 0.5.0
 
 - Replace architecture schema 1 with strict schema 2: explicit inclusion, exactly one layer per physical source, and deny-by-default dependency allowances. This is a breaking configuration change with no compatibility mode.

@@ -1,8 +1,8 @@
 # Architecture configuration, schema 2
 
-Put one `clear_dart_lints.yaml` in the analyzed package root. Version 0.5.0 has no schema 1 compatibility, configuration inheritance, built-in preset selection, or app generator. Start from a complete [template](../templates/README.md), then edit it. The [agent integration guide](agent_integration.md) explains installation and the required verification commands.
+Put one `clear_dart_lints.yaml` in the analyzed package root. Version 0.6.0 has no schema 1 compatibility, configuration inheritance, built-in preset selection, or app generator. Start from a complete [template](../templates/README.md), then edit it. The [agent integration guide](agent_integration.md) explains installation and the required verification commands.
 
-Architecture runs as native analyzer warnings automatically when the plugin is installed. Its diagnostic codes are `invalid_configuration`, `unclassified_source`, `ambiguous_layer`, `layer_dependencies`, `role_dependencies`, `depend_on_contracts`, `constructor_injection`, `forbidden_symbols`, and `unverifiable_dependency`, under the `clear_dart_lints/` prefix. Style diagnostics remain optional. The setup verifier rejects attempts to disable or lower architecture checks; it does not run an alternative architecture engine.
+Architecture runs as native analyzer warnings automatically when the plugin is installed. Its diagnostic codes are `invalid_configuration`, `unclassified_source`, `ambiguous_layer`, `layer_dependencies`, `role_dependencies`, `depend_on_contracts`, `constructor_injection`, `forbidden_symbols`, `unverifiable_dependency`, `feature_dependencies`, `unclassified_feature`, and `ambiguous_feature`, under the `clear_dart_lints/` prefix. Style diagnostics remain optional. The setup verifier rejects attempts to disable or lower architecture checks; it does not run an alternative architecture engine.
 
 ## Files and layers
 
@@ -51,7 +51,58 @@ The policy denies dependencies by default. An allowance applies when the source 
 
 Imports, exports, conditional branches, parts, resolved references and original declaration identities contribute to checks. Own-package barrels are followed through exports/parts, including cycles. Explicitly approving an external package permits its imports/exports without inspecting that package's internal dependency graph. A reference to a configured forbidden symbol is still checked by declaration identity. Do not use a broad `package:**` approval to avoid understanding actual dependencies.
 
-A layer spanning `lib/features/*/domain/**` allows edges among all matching features when that layer is allowed. It **does not enforce cross-feature isolation**. Define separate layers such as `items_domain` and `account_domain`, with disjoint paths and explicit edges, if you require that policy. This is a finite dependency graph, not an implicit feature-name comparison.
+A layer spanning `lib/features/*/domain/**` permits edges among matching features when that layer is allowed. Add `feature_dependencies` below to enforce feature boundaries independently of the layer graph. Feature-first templates already include it.
+
+## Feature dependencies
+
+```yaml
+rules:
+  # Retain the existing layer_dependencies and other rules.
+  feature_dependencies:
+    feature_paths: ['lib/features/{feature}/**']
+    shared_paths: ['lib/core/**']
+    composition_roots: ['lib/main.dart', 'lib/app/**']
+    allowed:
+      - from: [catalog]
+        to: [checkout]
+```
+
+The rule is optional in schema 2. Without it, existing policies keep their behavior.
+`feature_paths` is nonempty; other lists default to empty. Each pattern contains
+exactly one full `{feature}` segment capturing one directory name. Patterns are
+package-relative; `**` before the capture and parent-directory traversal are invalid.
+Several patterns may capture the same name, which denotes the same feature.
+`from` and `to` are nonempty lists of literal feature names; permissions are directed.
+Names may refer to future features without requiring a physical directory.
+
+Each included, nonexcluded physical source must match exactly one category:
+a feature name, `shared_paths`, or `composition_roots`. Overlapping categories or
+different captured feature names produce `ambiguous_feature`; no category produces
+`unclassified_feature`. Local dependency targets must also classify, even if excluded.
+
+Features may depend on themselves, shared code and composition roots. Shared code
+may depend only on shared code. Composition roots may assemble all categories.
+Different features require an `allowed` edge. These permissions never override
+layer, role, contract, injection or forbidden-symbol rules. Riverpod templates
+add `lib/di/**` to composition roots so features can use shared dependency providers.
+Resolved declaration identities and transitive exports/parts are checked; a barrel
+cannot grant access to another feature. External packages retain their existing
+layer URI policy and are not classified as local features.
+
+For a layer-first layout whose feature folders sit directly inside layers:
+
+```yaml
+feature_paths:
+  - 'lib/presentation/{feature}/**'
+  - 'lib/domain/{feature}/**'
+  - 'lib/data/{feature}/**'
+```
+
+Place the capture at the actual feature-name position. For folders under role
+folders, use patterns such as `lib/domain/repositories/{feature}/**` and enumerate
+the remaining role folders. Layer-first templates leave this choice explicit.
+Only `feature_dependencies` may have a reasoned exception; classification failures
+cannot be excepted or suppressed. See [agent tools and repair examples](agent_tools.md).
 
 ## Roles
 
@@ -68,11 +119,13 @@ roles:
     libraries: ['lib/domain/repositories/**', 'lib/data/repositories/**']
 ```
 
-A role has one or more alternatives: declaration `paths`; paired `names` **and** `libraries`; or resolved base `types`. Alternatives combine with OR. Within the names/libraries alternative both must match. Library selectors may match the declaration's physical package-relative path or library URI. At least one nonempty alternative is required. A `types` entry contains an exact library identity and declaration name, not a class-name glob. A public barrel may identify the base declaration. Resolved superclass and implemented-interface ancestry also establish roles.
+A role has one or more alternatives: declaration `paths`; paired `names` **and** `libraries`; or resolved base `types`. Alternatives combine with OR. Within the names/libraries alternative both must match. Library selectors may match the declaration's physical package-relative path or library URI. At least one nonempty alternative is required. A `types` entry contains an exact library identity and declaration name, not a class-name glob. A public barrel may identify the base declaration. Resolved superclass and implemented-interface ancestry also establish roles. Declaration path/name selectors also apply to top-level functions, getters and variables, including provider factory callbacks owned by those declarations. Parameters, local variables and class members do not independently receive declaration roles.
 
 `Bloc` and `Cubit` are different bases. A `*Bloc` name alone does not prove Bloc identity, and a Cubit is not a Bloc subtype. The Bloc and Cubit templates deliberately select only their respective resolved bases. Configure both type entries if the project permits both. MVVM has no universal base; its template uses an explicit view-model folder role and documents that convention.
 
-Extending or implementing a role does not itself constitute a forbidden consumer dependency. Role checks examine the containing consumer declaration. A top-level function or untyped consumer has no class role. Merely sharing the state layer does not grant repository access, and exposing a repository through a state manager does not grant a view permission to consume it. Self access within an allowed role is permitted. Nested generic and typedef types are resolved for dependency checks.
+MVVM MobX instead selects the resolved `Store` mixin from `package:mobx/mobx.dart`, including private Store bases and generated wrapper ancestry. A local namesake does not match. Ordinary superclass/mixin clauses and named mixin applications (`class Model = _Model with _$Model;`) establish inheritance without themselves counting as consumer dependencies; layer permissions still apply. See the [MobX guide](mobx.md).
+
+Extending or implementing a role does not itself constitute a forbidden consumer dependency. Role checks examine the containing class, or the owning top-level function/getter/variable when outside a class. Top-level consumers need their own matching declaration selector; their return type does not grant a consumer role. Merely sharing the state layer does not grant repository access, and exposing a repository through a state manager does not grant a view permission to consume it. Self access within an allowed role is permitted. Nested generic and typedef types are resolved for dependency checks.
 
 ## Role consumers and composition roots
 
@@ -109,7 +162,9 @@ rules:
     composition_roots: ['lib/main.dart', 'lib/app/**']
 ```
 
-These are fragments: define every referenced role in the complete file. `depend_on_contracts` checks that the dependency type used by a consumer is abstract. It does not prove where that dependency was obtained. `constructor_injection` checks acquisition and field origin: constructor parameters, initializing formals, and supported assignments from constructor parameters establish injected fields. Creating a repository directly or obtaining it through a service locator is not constructor injection. Roots may construct implementations and inject them.
+These are fragments: define every referenced role in the complete file. `depend_on_contracts` checks that the dependency type used by a consumer is abstract, including nested generic types and inferred invocation results. A concrete generic wrapper is not itself a concrete repository. This check does not prove where the dependency was obtained. `constructor_injection` checks acquisition and field origin: constructor parameters, initializing formals, and supported assignments from constructor parameters establish injected fields. Creating a repository directly or obtaining it through a service locator is not constructor injection. Roots may construct implementations and inject them.
+
+`constructor_injection` optionally accepts `allow_provider_reads: true` (boolean, default false). It additionally allows resolved `read`/`watch` methods from the Riverpod package on a Riverpod `Ref` receiver, including direct field initializers. It does not permit `ProviderContainer`, `WidgetRef`, same-named local methods, or arbitrary factory/service-locator calls. Layer, role and abstract-contract checks remain active. The option belongs only to `constructor_injection`; it is invalid on `depend_on_contracts`. See the complete [Riverpod templates and generation workflow](riverpod.md).
 
 ```dart
 abstract interface class ItemRepository {
@@ -142,7 +197,7 @@ exceptions:
 
 Forbidden symbol entries identify resolved declarations by library URI and name, including prefixed references and reexports. A class entry also covers its constructors and members. A same-named unrelated application declaration is not that symbol. Domain templates already restrict external libraries; this rule can additionally identify a particular declaration.
 
-An exception has a diagnostic `rule`, nonempty source `paths`, and a nonempty human-readable `reason`. It bypasses that rule in matching source files, so keep paths narrow and review the reason. Valid exception rules are `layer_dependencies`, `role_dependencies`, `depend_on_contracts`, `constructor_injection`, `forbidden_symbols`, and `unverifiable_dependency`. Exceptions cannot excuse invalid configuration, missing layer classification, or ambiguous layers. Do not replace explicit exceptions with analyzer ignores or severity reductions.
+An exception has a diagnostic `rule`, nonempty source `paths`, and a nonempty human-readable `reason`. It bypasses that rule in matching source files, so keep paths narrow and review the reason. Valid exception rules are `layer_dependencies`, `role_dependencies`, `depend_on_contracts`, `constructor_injection`, `forbidden_symbols`, `unverifiable_dependency`, and `feature_dependencies`. Exceptions cannot excuse invalid configuration, missing layer classification, or ambiguous layers. Do not replace explicit exceptions with analyzer ignores or severity reductions.
 
 ## Static boundary
 

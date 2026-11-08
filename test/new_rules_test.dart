@@ -8,6 +8,7 @@ import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/error/listener.dart';
+import 'package:analyzer/diagnostic/diagnostic.dart';
 import 'package:analyzer/workspace/workspace.dart';
 import 'package:clear_dart_lints/src/rules/custom/avoid_nested_widget_ternaries.dart';
 import 'package:clear_dart_lints/src/rules/effective_dart/avoid_nullable_async_returns.dart';
@@ -95,8 +96,11 @@ Future<List<String>> check(
   Map<String, String> files = const {},
   bool repeated = false,
   String target = 'main.dart',
+  bool realPackages = false,
+  bool requireValid = false,
+  void Function(List<Diagnostic>)? inspectDiagnostics,
 }) async {
-  final fixture = await Fixture.create(source);
+  final fixture = await Fixture.create(source, realPackages: realPackages);
   try {
     if (config != null) {
       File('${fixture.root.path}/clear_dart_lints.yaml').writeAsStringSync(config);
@@ -113,12 +117,20 @@ Future<List<String>> check(
                   .currentSession
                   .getResolvedUnit('${fixture.root.path}/$target')
               as ResolvedUnitResult;
+      if (requireValid) {
+        expect(
+          result.diagnostics,
+          isEmpty,
+          reason: '$target must resolve without analyzer diagnostics',
+        );
+      }
       final listener = RecordingDiagnosticListener();
       final context = _Context(result, listener);
       rule.reporter = context.currentUnit.diagnosticReporter;
       final registry = _Registry();
       rule.registerNodeProcessors(registry, context);
       result.unit.accept(_Dispatch(registry));
+      inspectDiagnostics?.call(listener.diagnostics);
       return listener.diagnostics.map((d) => d.diagnosticCode.lowerCaseName).toList();
     }
 

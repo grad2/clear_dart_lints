@@ -130,10 +130,157 @@ Future<void> main() async {
     if (!cleanAudit.passed || (await diagnostics()).isNotEmpty) {
       throw StateError('Clean package must pass setup and native analysis.');
     }
+    await verifySecrets(temp, options, original, diagnostics);
+    await verifyFeatures(temp, diagnostics);
     stdout.writeln(
-      'PASS: setup audit, native warnings, optional styles, exclusions and clean gate.',
+      'PASS: setup audit, native warnings, feature boundaries, agent CLI, optional styles, secret detection, exclusions and clean gate.',
     );
   } finally {
     temp.deleteSync(recursive: true);
+  }
+}
+
+Future<void> verifySecrets(
+  Directory root,
+  File options,
+  String original,
+  Future<List<List<String>>> Function() diagnostics,
+) async {
+  const code = 'avoid_hardcoded_secrets';
+  // Synthetic value assembled here to avoid committing a complete credential.
+  final credential = 'ghp_${List.filled(36, 'a').join()}';
+  final source = 'const credential = "$credential";\n';
+  final main = File('${root.path}/lib/main.dart');
+  main.writeAsStringSync(source);
+  if ((await diagnostics()).isNotEmpty) {
+    throw StateError('Secret detection must be disabled by default.');
+  }
+
+  final enabled = original.replaceFirst(
+    '    diagnostics:\n',
+    '    diagnostics:\n      $code: true\n',
+  );
+  options.writeAsStringSync(enabled);
+  final found = await diagnostics();
+  if (found.length != 1 || found.single[0] != 'INFO' || found.single[2].toLowerCase() != code) {
+    throw StateError('Enabled secret detection must emit one info and fail the gate: $found');
+  }
+  if (found.single[4] != '1' ||
+      found.single[5] != '20' ||
+      found.single[6] != '${credential.length + 2}') {
+    throw StateError('Secret detection must highlight the containing string: $found');
+  }
+  if (found.any((row) => row.join('|').contains(credential))) {
+    throw StateError('Secret diagnostics must not disclose the matched credential.');
+  }
+
+  for (final directive in ['ignore', 'ignore_for_file']) {
+    main.writeAsStringSync('// $directive: clear_dart_lints/$code\n$source');
+    if ((await diagnostics()).isNotEmpty) {
+      throw StateError('Standard $directive suppression must apply to secret detection.');
+    }
+  }
+
+  main.writeAsStringSync('void main() {}\n');
+  final generated = File('${root.path}/lib/secrets.g.dart');
+  generated.writeAsStringSync('// GENERATED CODE - DO NOT MODIFY BY HAND\n$source');
+  final excludedByPolicy = File('${root.path}/lib/excluded_conventions.dart');
+  excludedByPolicy.writeAsStringSync(source);
+  final outsidePolicy = File('${root.path}/test/secrets.dart');
+  outsidePolicy.parent.createSync(recursive: true);
+  outsidePolicy.writeAsStringSync(source);
+  final all = await diagnostics();
+  if (all.length != 3 || all.any((row) => row[2].toLowerCase() != code)) {
+    throw StateError(
+      'Generated and architecture-excluded/out-of-scope sources must be checked: $all',
+    );
+  }
+
+  options.writeAsStringSync('analyzer:\n  exclude: [lib/secrets.g.dart]\n$enabled');
+  final excluded = await diagnostics();
+  if (excluded.length != 2 || excluded.any((row) => row[3].endsWith('/lib/secrets.g.dart'))) {
+    throw StateError('Secret detection must respect analyzer exclusions: $excluded');
+  }
+
+  generated.deleteSync();
+  excludedByPolicy.deleteSync();
+  outsidePolicy.deleteSync();
+  options.writeAsStringSync(enabled);
+  if ((await diagnostics()).isNotEmpty) {
+    throw StateError('A clean package must pass with secret detection enabled.');
+  }
+}
+
+Future<void> verifyFeatures(
+  Directory root,
+  Future<List<List<String>>> Function() diagnostics,
+) async {
+  const policy = """
+schema_version: 2
+include: ['lib/**']
+exclude: ['lib/**/*.g.dart']
+layers:
+  app: ['lib/**']
+rules:
+  layer_dependencies:
+    allowed:
+      - from: [app]
+        to: [app]
+        uris: ['dart:*']
+  feature_dependencies:
+    feature_paths: ['lib/features/{feature}/**']
+    shared_paths: ['lib/core/**']
+    composition_roots: ['lib/main.dart']
+    allowed: []
+""";
+  final configuration = File('${root.path}/clear_dart_lints.yaml')..writeAsStringSync(policy);
+  final source = File('${root.path}/lib/features/catalog/home.dart');
+  final target = File('${root.path}/lib/features/checkout/order.dart');
+  for (final file in [source, target]) {
+    file.parent.createSync(recursive: true);
+  }
+  source.writeAsStringSync("import '../checkout/order.dart'; Order? order;\n");
+  target.writeAsStringSync('class Order {}\n');
+  final audit = await verifySetup(root.path);
+  if (!audit.passed) throw StateError('Feature fixture audit failed: ${audit.issues}');
+  Future<void> requireWarning(String code) async {
+    final rows = await diagnostics();
+    if (!rows.any((row) => row[0] == 'WARNING' && row[2].toLowerCase() == code)) {
+      throw StateError('Expected native warning $code: $rows');
+    }
+  }
+
+  await requireWarning('feature_dependencies');
+  configuration.writeAsStringSync(
+    policy.replaceFirst('allowed: []', 'allowed: [{from: [catalog], to: [checkout]}]'),
+  );
+  if ((await diagnostics()).isNotEmpty) throw StateError('Explicit feature edge must pass.');
+  configuration.writeAsStringSync(policy);
+  final unclassified = File('${root.path}/lib/loose.dart')..writeAsStringSync('class Loose {}\n');
+  await requireWarning('unclassified_feature');
+  unclassified.deleteSync();
+  configuration.writeAsStringSync(
+    policy.replaceFirst(
+      "shared_paths: ['lib/core/**']",
+      "shared_paths: ['lib/core/**', 'lib/features/**']",
+    ),
+  );
+  await requireWarning('ambiguous_feature');
+  configuration.writeAsStringSync(policy);
+  for (final command in ['context', 'verify_setup']) {
+    final result = await Process.run(Platform.resolvedExecutable, [
+      '--suppress-analytics',
+      'run',
+      'clear_dart_lints:$command',
+      if (command == 'context') 'lib/features/future/item.dart',
+      '--format=json',
+    ], workingDirectory: root.path);
+    if (result.exitCode != 0 || result.stderr.toString().trim().isNotEmpty) {
+      throw StateError('Consumer $command command failed: ${result.stdout} ${result.stderr}');
+    }
+    final json = jsonDecode(result.stdout.toString()) as Map<String, dynamic>;
+    if (json['format_version'] != 1 || json['passed'] != true || json['command'] != command) {
+      throw StateError('Invalid consumer $command JSON envelope: $json');
+    }
   }
 }

@@ -50,3 +50,19 @@ class RoleUsage extends RecursiveAstVisitor<void> {
 
 InterfaceElement? enclosingClass(AstNode node) =>
     node.thisOrAncestorOfType<ClassDeclaration>()?.declaredFragment?.element;
+
+/// A provider factory belongs to its top-level function or variable, including
+/// nested callbacks. A class remains the owner of its methods and fields.
+Element? enclosingConsumer(AstNode node) {
+  for (AstNode? current = node; current != null; current = current.parent) {
+    if (current is ClassDeclaration) return current.declaredFragment?.element;
+    if (current is ClassTypeAlias) return current.declaredFragment?.element;
+    if (current is FunctionDeclaration && current.parent is CompilationUnit) {
+      return current.declaredFragment?.element;
+    }
+    if (current is VariableDeclaration && current.parent?.parent is TopLevelVariableDeclaration) {
+      return current.declaredFragment?.element;
+    }
+  }
+  return null;
+}

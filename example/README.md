@@ -15,7 +15,7 @@ dart analyze --format=machine --fatal-infos
 
 The analysis command is expected to fail because the fixture deliberately violates rules. Its `analysis_options.yaml` installs the native plugin from the parent directory and opts into styles. Its `clear_dart_lints.yaml` supplies the explicit schema 2 architecture policy. Architecture diagnostics are warnings automatically; optional styles remain informational. Restart the Analysis Server after changing plugin installation/options.
 
-For a real consumer project, start from a [complete architecture template](../templates/README.md) and follow the [agent integration guide, including the consumer AGENTS.md snippet](../docs/agent_integration.md). Pin matching plugin/verifier versions, adapt paths and approved dependencies, then require both `dart run clear_dart_lints:verify_setup` and `dart analyze --format=machine --fatal-infos` to succeed. This intentionally failing fixture is checked with its dedicated verifier instead.
+For a real consumer project, start from a [complete architecture template](../templates/README.md) and follow the [agent integration guide, including the consumer AGENTS.md snippet](../doc/agent_integration.md). Pin matching plugin/verifier versions, adapt paths and approved dependencies, then require both `dart run clear_dart_lints:verify_setup` and `dart analyze --format=machine --fatal-infos` to succeed. This intentionally failing fixture is checked with its dedicated verifier instead.
 
 ## What to inspect
 
@@ -31,7 +31,7 @@ For a real consumer project, start from a [complete architecture template](../te
 | `excluded_conventions.dart` | Explicit configuration exclusion. |
 | `generated.g.dart` | Generated-file behavior; architecture skips require explicit configuration, while optional styles retain their existing behavior. |
 
-All included sources are classified in the example layer. This deliberately compact graph demonstrates rule behavior, not a recommended production layout. Use the templates to establish real UI/state/domain/data/core/app boundaries. See [configuration semantics and static limitations](../docs/configuration.md).
+All included sources are classified in the example layer. This deliberately compact graph demonstrates rule behavior, not a recommended production layout. Use the templates to establish real UI/state/domain/data/core/app boundaries. See [configuration semantics and static limitations](../doc/configuration.md).
 
 ## Verify expected diagnostics
 

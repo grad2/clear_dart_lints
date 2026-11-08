@@ -1,6 +1,6 @@
 # mvvm: feature_first
 
-Copy `clear_dart_lints.yaml` to the package root and merge `analysis_options.yaml` into the root options. Pin the matching verifier dev dependency to `0.5.0` as shown in the [agent integration guide](../../../docs/agent_integration.md). These files are explicit, editable configuration; no generator or runtime preset loader is involved.
+Copy `clear_dart_lints.yaml` to the package root and merge `analysis_options.yaml` into the root options. Pin the matching verifier dev dependency to `0.6.0` as shown in the [agent integration guide](../../../doc/agent_integration.md). These files are explicit, editable configuration; no generator or runtime preset loader is involved.
 
 Policy: View → ViewModel → abstract Repository → Service. Domain entities/contracts use only the explicitly listed basic Dart libraries and `core`; data owns transport. The data example approves `package:http/**` only. Add specific package URI permissions where your real dependencies require them.
 
@@ -26,7 +26,7 @@ Views cannot use repositories directly. Only configured state managers may consu
 
 Every included physical Dart file must match exactly one layer. Put new bootstrap files in `lib/app/`, shared code in `lib/core/`, and adapt globs for other folders. Generated files are excluded explicitly, not by filename magic or a comment marker; excluded local targets still require a classified layer when imported.
 
-These layer globs span all features: **they do not isolate one feature from another**. To enforce that boundary, split feature-specific layers and write explicit allowed edges; see [configuration semantics](../../../docs/configuration.md).
+These layer globs span all features: **they do not isolate one feature from another**. To enforce that boundary, split feature-specific layers and write explicit allowed edges; see [configuration semantics](../../../doc/configuration.md).
 
 Run the read-only setup audit, then native analysis:
 
@@ -35,4 +35,6 @@ dart run clear_dart_lints:verify_setup
 dart analyze --format=machine --fatal-infos
 ```
 
-Follow the complete [agent integration guide and copyable consumer AGENTS.md snippet](../../../docs/agent_integration.md). See [migration](../../../docs/migration_0_5.md) for schema 1 projects.
+Follow the complete [agent integration guide and copyable consumer AGENTS.md snippet](../../../doc/agent_integration.md). See [migration](../../../doc/migration_0_5.md) for schema 1 projects.
+
+The included `feature_dependencies` rule isolates features by directory name. Shared core and composition roots are explicit; cross-feature edges require permission in the policy.

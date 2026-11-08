@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
@@ -27,7 +29,14 @@ jobs:
         run: dart format --output=none --set-exit-if-changed lib bin test tool example/lib
       - name: Analyze the package
         run: dart analyze --fatal-infos
-      - name: Test architecture policies, setup audit and optional styles
+      - name: Test agent tools, feature boundaries, architecture and optional styles
         run: dart test
-      - name: Verify the native plugin on isolated example fixtures
+      - name: Compare the example policy with the trusted PR base
+        if: github.event_name == 'pull_request'
+        env:
+          POLICY_BASE: ${{ github.event.pull_request.base.sha }}
+        run: dart run bin/policy_diff.dart --base "$POLICY_BASE" example --format=json
+      - name: Audit the example consumer setup
+        run: dart run bin/verify_setup.dart example --format=json
+      - name: Verify native diagnostics and agent CLI on isolated example fixtures
         run: dart run tool/verify_example.dart

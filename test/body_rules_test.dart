@@ -35,7 +35,12 @@ class Fixture {
   final AnalysisContextCollection contexts;
   final Directory external;
   Fixture._(this.root, this.contexts, this.external);
-  static Future<Fixture> create(String source, {String options = '', String? included}) async {
+  static Future<Fixture> create(
+    String source, {
+    String options = '',
+    String? included,
+    bool realPackages = false,
+  }) async {
     final root = Directory.systemTemp.createTempSync('clear_dart_lints_test_');
     final sdk = File(Platform.resolvedExecutable).parent.parent;
     final external = Directory.systemTemp.createTempSync('clear_dart_lints_external_');
@@ -65,6 +70,18 @@ abstract class Cubit<S> {}
       jsonEncode({
         'configVersion': 2,
         'packages': [
+          if (realPackages)
+            for (final entry
+                in (jsonDecode(File('.dart_tool/package_config.json').readAsStringSync())
+                        as Map<String, dynamic>)['packages']
+                    as List<dynamic>)
+              if (!['fixture', 'flutter', 'bloc'].contains(entry['name']))
+                {
+                  ...entry as Map<String, dynamic>,
+                  'rootUri': File('.dart_tool/package_config.json').absolute.uri
+                      .resolve(entry['rootUri'] as String)
+                      .toString(),
+                },
           {'name': 'fixture', 'rootUri': '../', 'packageUri': 'lib/', 'languageVersion': '3.13'},
           {
             'name': 'bloc',

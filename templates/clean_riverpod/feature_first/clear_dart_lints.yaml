@@ -1,0 +1,91 @@
+# clean_riverpod / feature_first
+# Copy this complete file; presets are editable examples, not runtime inheritance.
+# Setup, boundaries and agent workflow: ../../../doc/agent_integration.md
+schema_version: 2
+include: ['lib/**']
+exclude: ['lib/**/*.g.dart', 'lib/**/*.freezed.dart', 'lib/generated/**']
+layers:
+  ui: ["lib/features/*/presentation/views/**"]
+  state: ["lib/features/*/presentation/providers/**", "lib/features/*/presentation/notifiers/**"]
+  domain: ["lib/features/*/domain/**"]
+  data: ["lib/features/*/data/**"]
+  core: ["lib/core/**"]
+  di: ["lib/di/**"]
+  app: ["lib/main.dart", "lib/app/**"]
+roles:
+  view:
+    paths: ["lib/features/*/presentation/views/**"]
+  state_manager:
+    paths: ["lib/features/*/presentation/providers/**", "lib/features/*/presentation/notifiers/**"]
+    types:
+      - library: package:riverpod/riverpod.dart
+        name: Notifier
+      - library: package:riverpod/riverpod.dart
+        name: AsyncNotifier
+      - library: package:riverpod/riverpod.dart
+        name: StreamNotifier
+  repository:
+    names: ["*Repository", "*RepositoryImpl"]
+    libraries: ["lib/features/*/domain/repositories/**", "lib/features/*/data/repositories/**"]
+  data_source:
+    paths: ["lib/features/*/data/datasources/**"]
+  use_case:
+    paths: ["lib/features/*/domain/usecases/**"]
+rules:
+  feature_dependencies:
+    feature_paths: ['lib/features/{feature}/**']
+    shared_paths: ['lib/core/**']
+    composition_roots: ['lib/main.dart', 'lib/app/**', 'lib/di/**']
+    allowed: []
+  layer_dependencies:
+    allowed:
+      - from: [ui]
+        to: ["ui", "state", "domain", "core"]
+        uris: ["dart:core", "dart:async", "dart:collection", "dart:math", "package:flutter/**", "package:flutter_riverpod/**", "package:riverpod/**", "package:riverpod_annotation/**"]
+      - from: [state]
+        to: ["state", "domain", "core", "di"]
+        uris: ["dart:core", "dart:async", "dart:collection", "package:riverpod/**", "package:riverpod_annotation/**"]
+      - from: [domain]
+        to: ["domain", "core"]
+        uris: ["dart:core", "dart:async", "dart:collection"]
+      - from: [data]
+        to: ["data", "domain", "core"]
+        uris: ["dart:*", "package:http/**"]
+      - from: [core]
+        to: ["core"]
+        uris: ["dart:core", "dart:async", "dart:collection"]
+      - from: [di]
+        to: ["di", "domain", "data", "core"]
+        uris: ["dart:*", "package:riverpod/**", "package:riverpod_annotation/**", "package:http/**"]
+      - from: [app]
+        to: ["ui", "state", "domain", "data", "core", "di", "app"]
+        uris: ["dart:*", "package:flutter/**", "package:http/**", "package:flutter_riverpod/**", "package:riverpod/**", "package:riverpod_annotation/**"]
+  role_dependencies:
+    composition_roots: ['lib/main.dart', 'lib/app/**', 'lib/di/**']
+    restrictions:
+      - source_layers: [ui, state, domain]
+        dependency_roles: [repository]
+        allowed_consumer_roles: [state_manager, use_case]
+      - source_layers: [ui, state, domain, data]
+        dependency_roles: [data_source]
+        allowed_consumer_roles: [repository]
+      - source_layers: [ui, state, domain]
+        dependency_roles: [use_case]
+        allowed_consumer_roles: [state_manager]
+  depend_on_contracts:
+    source_layers: [state, domain]
+    dependency_roles: [repository]
+    composition_roots: ['lib/main.dart', 'lib/app/**', 'lib/di/**']
+  constructor_injection:
+    allow_provider_reads: true
+    source_layers: [state, domain, data]
+    dependency_roles: [repository, data_source, use_case]
+    composition_roots: ['lib/main.dart', 'lib/app/**', 'lib/di/**']
+  forbidden_symbols:
+    source_layers: [domain]
+    symbols:
+      - library: dart:convert
+        name: jsonDecode
+      - library: dart:convert
+        name: jsonEncode
+exceptions: []

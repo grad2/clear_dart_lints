@@ -1,6 +1,6 @@
 # clean_bloc / layer_first
 # Copy this complete file; presets are editable examples, not runtime inheritance.
-# Setup, boundaries and agent workflow: ../../../docs/agent_integration.md
+# Setup, boundaries and agent workflow: ../../../doc/agent_integration.md
 schema_version: 2
 include: ['lib/**']
 exclude: ['lib/**/*.g.dart', 'lib/**/*.freezed.dart', 'lib/generated/**']
