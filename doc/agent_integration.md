@@ -31,7 +31,7 @@ The root `pubspec.yaml` needs the package as a development dependency to expose 
 
 ```yaml
 dev_dependencies:
-  clear_dart_lints: 0.6.1
+  clear_dart_lints: 0.6.2
 ```
 
 The root `analysis_options.yaml` separately installs the native plugin:
@@ -41,14 +41,14 @@ formatter:
   page_width: 100
 plugins:
   clear_dart_lints:
-    version: 0.6.1
+    version: 0.6.2
     # Optional style diagnostics; architecture is automatically enabled.
     diagnostics:
       prefer_block_body_for_build: true
       one_public_class_per_file: true
 ```
 
-Preserve existing `include`, formatter, analyzer, lint and plugin settings. Merge mappings without duplicate keys. A dev dependency alone does not install the native plugin; a native plugin alone does not make the consumer's `dart run` command available. Pin the plugin to the exact version of the resolved verifier dependency. The audit rejects a range such as `^0.6.1` for the plugin because the two independently resolved installations could drift. Resolve dependencies with `dart pub get`, or `flutter pub get` for Flutter projects, and retain the consumer's lockfile according to its existing policy.
+Preserve existing `include`, formatter, analyzer, lint and plugin settings. Merge mappings without duplicate keys. A dev dependency alone does not install the native plugin; a native plugin alone does not make the consumer's `dart run` command available. Pin the plugin to the exact version of the resolved verifier dependency. The audit rejects a range such as `^0.6.2` for the plugin because the two independently resolved installations could drift. Resolve dependencies with `dart pub get`, or `flutter pub get` for Flutter projects, and retain the consumer's lockfile according to its existing policy.
 
 For a local checkout, both entries must resolve to the **same** directory:
 

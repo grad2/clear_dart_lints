@@ -456,7 +456,8 @@ class _Visitor extends SimpleAstVisitor<void> {
           if (node is InstanceCreationExpression ||
               node is MethodInvocation ||
               node is FunctionExpressionInvocation) {
-            if (!(injection.allowProviderReads && _providerRead(node))) {
+            if (!(injection.allowProviderReads && _providerRead(node)) &&
+                !identical(node, _injectableForwardingFactory(node))) {
               report(
                 node,
                 ArchitecturePolicy.constructorInjection,
@@ -468,7 +469,8 @@ class _Visitor extends SimpleAstVisitor<void> {
             final parameter = node.thisOrAncestorOfType<FormalParameter>();
             if (parameter != null &&
                 parameter.thisOrAncestorOfType<ConstructorDeclaration>() == null &&
-                !_topLevelParameter(parameter)) {
+                !_topLevelParameter(parameter) &&
+                !_injectableFactoryParameter(parameter)) {
               report(
                 node,
                 ArchitecturePolicy.constructorInjection,
@@ -582,6 +584,83 @@ bool _topLevelParameter(FormalParameter parameter) {
   if (function is! FunctionExpression) return false;
   final declaration = function.parent;
   return declaration is FunctionDeclaration && declaration.parent is CompilationUnit;
+}
+
+bool _injectableFactoryParameter(FormalParameter parameter) =>
+    parameter.thisOrAncestorOfType<FormalParameterList>()?.parent is MethodDeclaration &&
+    _injectableForwardingFactory(parameter) != null;
+
+/// Recognizes only a direct self-construction from explicit required inputs.
+/// The exemption applies to that creation and its factory's parameters, never
+/// to the whole method: all other architecture checks still visit every node.
+InstanceCreationExpression? _injectableForwardingFactory(AstNode node) {
+  final method = node.thisOrAncestorOfType<MethodDeclaration>();
+  final element = method?.declaredFragment?.element;
+  if (method == null ||
+      !method.isStatic ||
+      element is! MethodElement ||
+      method.body.keyword != null ||
+      !element.metadata.annotations.any((annotation) {
+        final type = annotation.computeConstantValue()?.type;
+        return type is InterfaceType &&
+            type.element.name == 'FactoryMethod' &&
+            type.element.library.uri.toString().startsWith('package:injectable/');
+      })) {
+    return null;
+  }
+  final owner = element.enclosingElement;
+  final returnType = element.returnType;
+  if (owner is! ClassElement ||
+      returnType is! InterfaceType ||
+      returnType.element != owner ||
+      returnType.nullabilitySuffix != NullabilitySuffix.none) {
+    return null;
+  }
+  final body = method.body;
+  final Expression? returned;
+  if (body is ExpressionFunctionBody) {
+    returned = body.expression;
+  } else if (body is BlockFunctionBody &&
+      body.block.statements.length == 1 &&
+      body.block.statements.single is ReturnStatement) {
+    returned = (body.block.statements.single as ReturnStatement).expression;
+  } else {
+    return null;
+  }
+  final creation = returned == null ? null : unparenthesized(returned);
+  if (creation is! InstanceCreationExpression) return null;
+  final constructor = creation.constructorName.element;
+  if (constructor == null ||
+      constructor.enclosingElement != owner ||
+      !constructor.isGenerative ||
+      constructor.redirectedConstructor != null) {
+    return null;
+  }
+  final inputs = element.formalParameters.toSet();
+  if (inputs.any((input) => !input.isRequired || input.hasDefaultValue)) return null;
+  final forwarded = <FormalParameterElement>{};
+  for (final argument in creation.argumentList.arguments) {
+    final value = unparenthesized(argument.argumentExpression);
+    final target = argument.correspondingParameter?.baseElement;
+    if (value is! SimpleIdentifier ||
+        !inputs.remove(value.element) ||
+        target == null ||
+        !forwarded.add(target)) {
+      return null;
+    }
+  }
+  if (inputs.isNotEmpty) return null;
+  // Omitted optional configuration may be absent, but must not supply hidden
+  // dependencies through a non-null default. Explicit arguments are all inputs.
+  if (constructor.formalParameters.any(
+    (parameter) =>
+        !forwarded.contains(parameter.baseElement) &&
+        (parameter.isRequired ||
+            (parameter.hasDefaultValue && parameter.defaultValueCode != 'null')),
+  )) {
+    return null;
+  }
+  return creation;
 }
 
 bool _absentDependency(VariableElement field, Expression value) =>

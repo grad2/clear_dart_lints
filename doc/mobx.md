@@ -30,7 +30,7 @@ dependencies:
   mobx: ^2.7.0
   flutter_mobx: ^2.4.0
 dev_dependencies:
-  clear_dart_lints: 0.6.1
+  clear_dart_lints: 0.6.2
   mobx_codegen: ^2.7.8
   build_runner: ^2.15.1
 ```

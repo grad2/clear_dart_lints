@@ -1,3 +1,7 @@
+## 0.6.2
+
+- Accept resolved Injectable `@factoryMethod` static factories that directly construct their own type from explicit required parameters. Keep dependency acquisition and all other architecture checks active.
+
 ## 0.6.1
 
 - Recognize positional/named record fields and typed nullable callback calls by their static signatures. Use resolved write elements for index assignments and updates.

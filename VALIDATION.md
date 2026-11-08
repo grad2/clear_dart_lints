@@ -1,5 +1,59 @@
 # Validation history
 
+## 0.6.2 release preparation — 2026-11-09
+
+Environment: Dart 3.13.2, Flutter 3.47.2, macOS arm64.
+
+- Includes the Injectable self-factory fix and 22 regression tests recorded below.
+  The full 279-test verification applies to the final rule implementation.
+- Updated current installation examples, sixteen template plugin pins, the example
+  lockfile and framework-verifier replacements to 0.6.2. Historical entries retain
+  their original version numbers.
+- After the version update, all 37 focused factory, configuration/template and
+  setup-verifier tests passed.
+- `dart analyze --fatal-infos`: no issues. Formatting checked 69 Dart files
+  without changes; diff whitespace and local Markdown links passed.
+- `dart run tool/verify_example.dart`: setup, native diagnostics, feature
+  boundaries, agent CLI, styles, secrets, exclusions and clean gate passed.
+- `dart run tool/verify_riverpod.dart`: all four policy/layout combinations passed
+  setup, generated/manual sources and native clean/failing gates.
+- `dart run tool/verify_mobx.dart <flutter-executable>`: both layouts passed setup,
+  generated Stores, Flutter Observer and native warning gates.
+
+The publication gate is `dart pub publish --dry-run` from the release commit.
+GitHub PR checks repeat the full suite and native example verification before
+merging or publishing.
+
+## Injectable self-factory regression fixes — 2026-11-09
+
+Environment: Dart 3.13.2, macOS arm64. Package version remains 0.6.1;
+these changes are unreleased.
+
+- Reproduced incorrect constructor-injection warnings on positional and named
+  self-construction in real Injectable `@factoryMethod` static factories. Four
+  positive fixtures failed before the fix; the initial 14 negative controls passed.
+- Added 22 resolved regression tests using Injectable 3.0.0 as a dev dependency.
+  Covered required-input forwarding, nullable optional constructor modes,
+  annotation prefixes/re-exports, role-typed factory inputs and negative cases for
+  lookalike annotations, instance/getter/async methods, foreign construction,
+  locator calls, globals, defaults, duplicated inputs and constructor redirection.
+- The exception only applies to verified direct self-construction and its explicit
+  factory parameters. Tests retain layer, role, contract and forbidden-symbol
+  diagnostics inside verified factories.
+- `dart test --reporter expanded`: all 279 tests passed. After tightening two test
+  fixtures, all 22 factory tests passed again.
+- `dart analyze --fatal-infos`: no issues. Formatting checked 69 Dart files
+  without changes; `git diff --check` passed.
+- Native analyzer on an isolated consumer with both self-factory forms: exactly
+  one constructor-injection warning remains, on the `BadConsumer` negative
+  control. Both self factories are clean, without compilation, configuration or
+  classification diagnostics.
+- `dart run tool/verify_example.dart`: setup audit, native warnings, feature
+  boundaries, agent CLI, optional styles, secrets, exclusions and clean gate passed.
+
+Consumer project files were not modified. No commit, push, PR, tag, release or
+package publication was performed for these changes.
+
 ## 0.6.1 release preparation — 2026-11-08
 
 Environment: Dart 3.13.2, Flutter 3.47.2, macOS arm64.

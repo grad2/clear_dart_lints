@@ -2,7 +2,7 @@
 
 Strict architecture checks for Dart and Flutter projects, designed for developers, coding agents, and CI. Define which layers and roles may depend on each other in `clear_dart_lints.yaml`. The native Dart analyzer reports violations in the IDE and on the command line.
 
-Version **0.6.1** enables architecture warnings by default and requires schema 2. Effective Dart and style checks remain opt-in.
+Version **0.6.2** enables architecture warnings by default and requires schema 2. Effective Dart and style checks remain opt-in.
 
 ## Start here
 
@@ -25,14 +25,14 @@ Pin the same version in the consumer's `pubspec.yaml` and `analysis_options.yaml
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  clear_dart_lints: 0.6.1
+  clear_dart_lints: 0.6.2
 ```
 
 ```yaml
 # analysis_options.yaml
 plugins:
   clear_dart_lints:
-    version: 0.6.1
+    version: 0.6.2
 ```
 
 Merge with existing options without duplicate keys. Keep inherited formatter settings. The plugin version must exactly match the verifier dependency; the audit rejects plugin version ranges that could resolve independently. A dev dependency alone does not install the native plugin. For local development, use the same `path: ../clear_dart_lints` directory in both entries. No `custom_lint` integration is required.

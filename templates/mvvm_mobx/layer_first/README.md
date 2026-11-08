@@ -1,6 +1,6 @@
 # mvvm_mobx: layer_first
 
-Copy `clear_dart_lints.yaml` to the package root and merge `analysis_options.yaml` into the root options. Pin the matching verifier dev dependency to `0.6.1` as shown in the [agent integration guide](../../../doc/agent_integration.md). These are complete, editable schema 2 policies.
+Copy `clear_dart_lints.yaml` to the package root and merge `analysis_options.yaml` into the root options. Pin the matching verifier dev dependency to `0.6.2` as shown in the [agent integration guide](../../../doc/agent_integration.md). These are complete, editable schema 2 policies.
 
 Policy: View → MobX Store/ViewModel → abstract Repository → Service. Views consume model state/actions. Repositories receive services through their constructors. Domain and core remain independent of MobX and Flutter; state uses MobX without importing Flutter or data implementations.
 

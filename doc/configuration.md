@@ -1,6 +1,6 @@
 # Architecture configuration, schema 2
 
-Put one `clear_dart_lints.yaml` in the analyzed package root. Version 0.6.1 has no schema 1 compatibility, configuration inheritance, built-in preset selection, or app generator. Start from a complete [template](../templates/README.md), then edit it. The [agent integration guide](agent_integration.md) explains installation and the required verification commands.
+Put one `clear_dart_lints.yaml` in the analyzed package root. Version 0.6.2 has no schema 1 compatibility, configuration inheritance, built-in preset selection, or app generator. Start from a complete [template](../templates/README.md), then edit it. The [agent integration guide](agent_integration.md) explains installation and the required verification commands.
 
 Architecture runs as native analyzer warnings automatically when the plugin is installed. Its diagnostic codes are `invalid_configuration`, `unclassified_source`, `ambiguous_layer`, `layer_dependencies`, `role_dependencies`, `depend_on_contracts`, `constructor_injection`, `forbidden_symbols`, `unverifiable_dependency`, `feature_dependencies`, `unclassified_feature`, and `ambiguous_feature`, under the `clear_dart_lints/` prefix. Style diagnostics remain optional. The setup verifier rejects attempts to disable or lower architecture checks; it does not run an alternative architecture engine.
 
@@ -173,6 +173,17 @@ origin must still be injected. Nullability alone, conditional assignments and
 fallbacks to globals, factories or concrete implementations do not establish an
 injected origin; a later untrusted constructor assignment also invalidates an
 initial `null`.
+
+A static method with a resolved Injectable `@factoryMethod` annotation can
+construct its own returned class directly from its required parameters. The body
+must be a single expression or return statement; every input must be forwarded
+exactly once to a non-redirecting generative constructor, using positional or named
+arguments. Omitted constructor inputs may only have an implicit or literal `null`
+default. This also permits role-typed parameters of that factory. Methods named
+`injected`, local lookalike annotations, optional factory inputs, dependency
+creation, locator calls and substitutions do not qualify. Other architecture
+checks, including layer, role, contract and forbidden-symbol restrictions, remain
+active.
 
 `constructor_injection` optionally accepts `allow_provider_reads: true` (boolean, default false). It additionally allows resolved `read`/`watch` methods from the Riverpod package on a Riverpod `Ref` receiver, including direct field initializers. It does not permit `ProviderContainer`, `WidgetRef`, same-named local methods, or arbitrary factory/service-locator calls. Layer, role and abstract-contract checks remain active. The option belongs only to `constructor_injection`; it is invalid on `depend_on_contracts`. See the complete [Riverpod templates and generation workflow](riverpod.md).
 
