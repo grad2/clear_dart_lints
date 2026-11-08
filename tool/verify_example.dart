@@ -130,17 +130,7 @@ Future<void> main() async {
     if (fingerprint(rows).join('\n') != fingerprint(again).join('\n')) {
       throw StateError('Repeated analysis changed diagnostics: $again');
     }
-    final originalOptions = Map<String, Object?>.from(loadYaml(original) as Map);
-    final analyzerOptions = Map<String, Object?>.from(originalOptions['analyzer'] as Map? ?? {});
-    options.writeAsStringSync(
-      jsonEncode({
-        ...originalOptions,
-        'analyzer': {
-          ...analyzerOptions,
-          'exclude': [...?analyzerOptions['exclude'] as List?, 'lib/new_rules.dart'],
-        },
-      }),
-    );
+    options.writeAsStringSync(_withAnalyzerExclusion(original, 'lib/new_rules.dart'));
     final excluded = await diagnostics();
     if (excluded.any((r) => r[3].replaceAll('\\', '/').endsWith('/lib/new_rules.dart'))) {
       throw StateError('Analyzer exclusion failed: $excluded');
@@ -219,7 +209,7 @@ Future<void> verifySecrets(
     );
   }
 
-  options.writeAsStringSync('analyzer:\n  exclude: [lib/secrets.g.dart]\n$enabled');
+  options.writeAsStringSync(_withAnalyzerExclusion(enabled, 'lib/secrets.g.dart'));
   final excluded = await diagnostics();
   if (excluded.length != 2 || excluded.any((row) => row[3].endsWith('/lib/secrets.g.dart'))) {
     throw StateError('Secret detection must respect analyzer exclusions: $excluded');
@@ -232,6 +222,18 @@ Future<void> verifySecrets(
   if ((await diagnostics()).isNotEmpty) {
     throw StateError('A clean package must pass with secret detection enabled.');
   }
+}
+
+String _withAnalyzerExclusion(String configuration, String excludedPath) {
+  final options = Map<String, Object?>.from(loadYaml(configuration) as Map);
+  final analyzer = Map<String, Object?>.from(options['analyzer'] as Map? ?? {});
+  return jsonEncode({
+    ...options,
+    'analyzer': {
+      ...analyzer,
+      'exclude': [...?analyzer['exclude'] as List?, excludedPath],
+    },
+  });
 }
 
 Future<void> verifyFeatures(
