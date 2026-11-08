@@ -55,7 +55,9 @@ Future<void> main() async {
         temp.path,
       ]);
       if (result.exitCode != 0 && result.exitCode != 1 && result.exitCode != 2) {
-        throw StateError('Analyzer failed: ${result.stdout}\n${result.stderr}');
+        throw StateError(
+          'Analyzer exited with ${result.exitCode}: ${result.stdout}\n${result.stderr}',
+        );
       }
       if (result.stderr.toString().trim().isNotEmpty) {
         throw StateError('Analyzer reported a plugin error: ${result.stderr}');
